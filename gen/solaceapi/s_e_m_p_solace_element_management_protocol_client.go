@@ -10,7 +10,7 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 
-	"kindredtech.net/solace-plugin/gen/solaceapi/all"
+	"kindredgroup.com/solace-plugin/gen/solaceapi/all"
 )
 
 // Default s e m p solace element management protocol HTTP client.

@@ -12,7 +12,7 @@ import (
 	"github.com/go-openapi/runtime"
 	"github.com/go-openapi/strfmt"
 
-	"kindredtech.net/solace-plugin/gen/models"
+	"kindredgroup.com/solace-plugin/gen/models"
 )
 
 // GetMsgVpnClientUsernameAttributesReader is a Reader for the GetMsgVpnClientUsernameAttributes structure.

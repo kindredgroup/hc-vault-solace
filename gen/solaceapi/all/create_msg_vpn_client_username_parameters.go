@@ -16,7 +16,7 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 
-	"kindredtech.net/solace-plugin/gen/models"
+	"kindredgroup.com/solace-plugin/gen/models"
 )
 
 // NewCreateMsgVpnClientUsernameParams creates a new CreateMsgVpnClientUsernameParams object,

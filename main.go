@@ -6,7 +6,7 @@ import (
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/plugin"
-	solace "kindredtech.net/solace-plugin/plugin"
+	solace "kindredgroup.com/solace-plugin/plugin"
 )
 
 func main() {

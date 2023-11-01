@@ -9,8 +9,8 @@ import (
 	hclog "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/framework"
 	logical "github.com/hashicorp/vault/sdk/logical"
-	models "kindredtech.net/solace-plugin/gen/models"
-	all "kindredtech.net/solace-plugin/gen/solaceapi/all"
+	models "kindredgroup.com/solace-plugin/gen/models"
+	all "kindredgroup.com/solace-plugin/gen/solaceapi/all"
 )
 
 func (b *backend) pathUser() *framework.Path {

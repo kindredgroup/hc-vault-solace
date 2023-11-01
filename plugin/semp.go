@@ -8,7 +8,7 @@ import (
 	hclog "github.com/hashicorp/go-hclog"
 	"io"
 	"io/ioutil"
-	all "kindredtech.net/solace-plugin/gen/solaceapi/all"
+	all "kindredgroup.com/solace-plugin/gen/solaceapi/all"
 	"net/http"
 	"net/url"
 	"strings"

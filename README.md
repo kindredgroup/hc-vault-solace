@@ -6,9 +6,9 @@ This is custom secrets engine for Vault which generates dynamic credentials in S
 
 Vault Docker images used for testing are based on Alpine Linux (musl), so they need an extra step to build the plugin.
 ```
-[dev|pripii@priitp-roadkill ]$ mkdir $GOPATH/src/kindredtech.net && cd $GOPATH/src/kindredtech.net
-[dev|pripii@priitp-roadkill kindredtech.net]$ git clone https://bitbucket.kindredgroup.com/bitbucket/scm/dbs/solace-vault.git solace-plugin && cd solace-plugin
-[dev|pripii@priitp-roadkill solace-plugin]$ podman run -i --rm -v `pwd`:/build -w /build docker.kindredgroup.com/golang:1.19-alpine go build -tags netgo,osusergo -v
+[dev|pripii@priitp-roadkill ]$ mkdir $GOPATH/src/kindredgroup.com && cd $GOPATH/src/kindredgroup.com
+[dev|pripii@priitp-roadkill kindredgroup.com]$ git clone https://bitbucket.kindredgroup.com/bitbucket/scm/dbs/solace-vault.git solace-plugin && cd solace-plugin
+[dev|pripii@priitp-roadkill solace-plugin]$ podman run -i --rm -v `pwd`:/build -w /build golang:1.19-alpine go build -tags netgo,osusergo -v
 ```
 This creates the file `solace-plugin` in the current directory.
 
@@ -252,6 +252,6 @@ Strict-Transport-Security: max-age=31536000
     solapi_test.go:87: [DELETE /msgVpns/{msgVpnName}/clientUsernames/{clientUsername}][400] deleteMsgVpnClientUsername default  &{Meta:0xc0005a94a0}
 FAIL
 exit status 1
-FAIL    kindredtech.net/solace-plugin   0.086s
+FAIL    kindredgroup.com/solace-plugin   0.086s
 
 ```

@@ -1,4 +1,4 @@
-module kindredtech.net/solace-plugin
+module kindredgroup.com/solace-plugin
 
 go 1.19
 
