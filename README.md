@@ -155,10 +155,6 @@ All revocation operations queued successfully!
 ```
 On revocation user in Solace is dropped.
 
-## VPN filter
-
-File `plugin/solace.go` contains list of VPNs where plugin can't create new credentials. Check is done during the role creation and update. Currently defaults to `*\_management`.
-
 ## Static credentials
 ```
 bash-5.0# vault write solace-plugin/user/testuser role=test2role
