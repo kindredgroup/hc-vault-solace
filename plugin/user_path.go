@@ -40,7 +40,7 @@ func (b *backend) pathUser() *framework.Path {
 				Callback: b.deleteUser,
 			},
 		},
-		ExistenceCheck: b.userExCheck,
+		ExistenceCheck:  b.userExCheck,
 		HelpSynopsis:    `Endpoint to create static users.`,
 		HelpDescription: `Endpoint to create static users. Configuration comes from role.`,
 	}

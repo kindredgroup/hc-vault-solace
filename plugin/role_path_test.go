@@ -186,7 +186,7 @@ func TestUpdateRole(t *testing.T) {
 		UsernamePrefix:                       resp.Data["username_prefix"].(string),
 	}
 	if role.TTL.String() != pl["ttl"] {
-	        t.Fatal("TTLs are different, ttl set = " + pl["ttl"].(string) + ", ttl received = " + role.TTL.String())
+		t.Fatal("TTLs are different, ttl set = " + pl["ttl"].(string) + ", ttl received = " + role.TTL.String())
 	}
 
 	if role.Vpn != testVpn {

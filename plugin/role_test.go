@@ -10,8 +10,8 @@ func TestRole(t *testing.T) {
 	b, _ := getBackend(t)
 	var be *backend = b.(*backend)
 	data := map[string]interface{}{
-		"name":               testRoleName,
-		"vpn":                testVpn,
+		"name": testRoleName,
+		"vpn":  testVpn,
 	}
 	input := &framework.FieldData{
 		Raw: data,

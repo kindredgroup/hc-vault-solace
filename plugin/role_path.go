@@ -66,7 +66,7 @@ func (b *backend) pathRole() *framework.Path {
 				Callback: b.deleteRole,
 			},
 		},
-		ExistenceCheck: b.roleExCheck,
+		ExistenceCheck:  b.roleExCheck,
 		HelpSynopsis:    `Role is used to generate dynamic credentials.`,
 		HelpDescription: `Role is used to generate dynamic credentials.`,
 	}

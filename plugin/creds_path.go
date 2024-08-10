@@ -13,7 +13,7 @@ import (
 
 const (
 	SecretType = "password"
-	MaxTTL = time.Duration(11000000000000000)
+	MaxTTL     = time.Duration(11000000000000000)
 )
 
 func confData(configName string) *framework.FieldData {

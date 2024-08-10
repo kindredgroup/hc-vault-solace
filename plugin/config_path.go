@@ -58,7 +58,7 @@ func (b *backend) pathSolaceConfig() *framework.Path {
 			},
 		},
 		ExistenceCheck: b.confExCheck,
-		HelpSynopsis: `Config for specific Solace instance.`,
+		HelpSynopsis:   `Config for specific Solace instance.`,
 		HelpDescription: `Config for specific Solace instance. There's 1:1 correspondance between ` +
 			`config item and Solace instance.`,
 	}
