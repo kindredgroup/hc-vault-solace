@@ -7,8 +7,8 @@ This is custom secrets engine for Vault which generates dynamic credentials in S
 Vault Docker images used for testing are based on Alpine Linux (musl), so they need an extra step to build the plugin.
 ```
 [dev|pripii@priitp-roadkill ]$ mkdir $GOPATH/src/kindredgroup.com && cd $GOPATH/src/kindredgroup.com
-[dev|pripii@priitp-roadkill kindredgroup.com]$ git clone https://bitbucket.kindredgroup.com/bitbucket/scm/dbs/solace-vault.git solace-plugin && cd solace-plugin
-[dev|pripii@priitp-roadkill solace-plugin]$ podman run -i --rm -v `pwd`:/build -w /build golang:1.19-alpine go build -tags netgo,osusergo -v
+[dev|pripii@priitp-roadkill kindredgroup.com]$ git clone https://github.com/kindredgroup/hc-vault-solace solace-plugin && cd solace-plugin
+[dev|pripii@priitp-roadkill solace-plugin]$ podman run -i --rm -v `pwd`:/build -w /build golang:1.21.11-alpine go build -tags netgo,osusergo -v
 ```
 This creates the file `solace-plugin` in the current directory.
 
@@ -27,7 +27,7 @@ Assuming that binary is copied to `/vault/plugins/solace-plugin`:
 
 Since plugin is versioned it can't be just installed, it has to be upgraded. As a bonus, if upgrade fails vault will fall back to the previous version of the plugin.
 ```
-$PLUGIN="/vault/plugins/solace-plugin-v0.0.45"
+$PLUGIN="/vault/plugins/solace-plugin-v0.0.52"
 $PLUGIN_VERSION="v0.0.45"
 setcap cap_ipc_lock=+ep $PLUGIN
 HASH=`sha256sum $PLUGIN|cut -d ' ' -f 1`
@@ -36,13 +36,6 @@ vault secrets enable solace-plugin
 vault secrets tune -plugin-version=$PLUGIN_VERSION solace-plugin
 vault plugin reload -plugin solace-plugin
 ```
-### Scripted smoke tests
-
-`./scripts/deploy.sh` can either install or upgrade the plugin. Assuming that plugin has been compiled, `./scripts/deploy.sh install v0.0.45` installs the plugin, and `./scripts/deploy.sh upgrade v0.0.45` does the upgrade. Version number comes from plugin/backend.go. Container name has to be set in `deploy.sh`.
- 
-## Versioning
-
-Each pull request creates a new version in Bitbucket. Version number in Jira/Bitbucket should correspond to the plugin version in `plugin/backend.go`.
 
 ## Plugin configuration
 
