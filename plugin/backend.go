@@ -11,7 +11,7 @@ import (
 
 const (
 	solaceTypeName = "solace"
-	pluginVersion  = "v0.0.49"
+	pluginVersion  = "v0.0.52"
 )
 
 // Factory creates and configures backend for the plugin main method.
