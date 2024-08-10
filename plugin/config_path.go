@@ -75,7 +75,7 @@ func (b *backend) pathConfigList() *framework.Path {
 	}
 }
 
-func (b *backend) listConfigs(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) listConfigs(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
 	logger := b.Backend.Logger()
 	b.bLock.RLock()
 	defer b.bLock.RUnlock()

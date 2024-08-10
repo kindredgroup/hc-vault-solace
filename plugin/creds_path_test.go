@@ -57,7 +57,7 @@ func TestRotateCreds(t *testing.T) {
 	}
 	gepo := resp.Data["guaranteed_endpoint_permission_override"].(bool)
 	if gepo != guaranteedEndpointPermissionOverride {
-		t.Fatal(fmt.Sprintf("Expected GuaranteedEndpointPermissionOverride: %t, received %t", guaranteedEndpointPermissionOverride, gepo))
+		t.Fatalf("Expected GuaranteedEndpointPermissionOverride: %t, received %t", guaranteedEndpointPermissionOverride, gepo)
 	}
 
 	if !strings.HasPrefix(user, testUserPrefix+"-") {
@@ -122,7 +122,7 @@ func TestPrefixCreds(t *testing.T) {
 		"username": user,
 		"role":     testRoleName,
 	}
-	resp, err = callBackend("creds/", logical.RevokeOperation, pl, b, cfg, resp.Secret)
+	_, err = callBackend("creds/", logical.RevokeOperation, pl, b, cfg, resp.Secret)
 	if err != nil {
 		t.Fatal(err)
 	}

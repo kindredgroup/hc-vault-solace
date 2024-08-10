@@ -10,7 +10,7 @@ import (
 type Role struct {
 	Name                                 string
 	Vpn                                  string
-	Ttl                                  time.Duration
+	TTL                                  time.Duration
 	ConfigName                           string
 	ACLProfile                           string
 	ClientProfile                        string
@@ -20,7 +20,7 @@ type Role struct {
 }
 
 func (r *Role) String() string {
-	return fmt.Sprintf("name=%s, vpn=%s, ttl=%s, acl=%s, client_profile=%s, config_name=%s, guaranteed_endpoint_permission_override=%t, subscription_manager=%t, username_prefix=%s", r.Name, r.Vpn, r.Ttl.String(), r.ACLProfile, r.ClientProfile, r.ConfigName, r.GuaranteedEndpointPermissionOverride, r.SubscriptionManager, r.UsernamePrefix)
+	return fmt.Sprintf("name=%s, vpn=%s, ttl=%s, acl=%s, client_profile=%s, config_name=%s, guaranteed_endpoint_permission_override=%t, subscription_manager=%t, username_prefix=%s", r.Name, r.Vpn, r.TTL.String(), r.ACLProfile, r.ClientProfile, r.ConfigName, r.GuaranteedEndpointPermissionOverride, r.SubscriptionManager, r.UsernamePrefix)
 }
 
 func data2role(data *framework.FieldData) (*Role, error) {
@@ -42,7 +42,7 @@ func data2role(data *framework.FieldData) (*Role, error) {
 
 	ttlRaw, ok := data.GetOk("ttl")
 	if ok {
-		role.Ttl = time.Duration(ttlRaw.(int))
+		role.TTL = time.Duration(ttlRaw.(int))
 	}
 
 	aclRaw, ok := data.GetOk("acl_profile")

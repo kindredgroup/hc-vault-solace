@@ -66,7 +66,7 @@ func (b *backend) withRoleAndConfig(ctx context.Context, req *logical.Request, d
 	}
 	logger.Debug("withRoleAndConfig", "role", role)
 
-	cfg, err := b.fetchConfig(ctx, req, conf_data(role.ConfigName))
+	cfg, err := b.fetchConfig(ctx, req, confData(role.ConfigName))
 	if err != nil {
 		logger.Error("withRoleAndConfig", "error", err)
 		return nil, err
@@ -186,6 +186,6 @@ func createSolaceUser(cfg *solaceConfig, role *Role, username string, pwd string
 }
 
 // userExCheck is a dummy check, if the user exists in Solace, create operation will return error anyway
-func (b *backend) userExCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *backend) userExCheck(_ context.Context, _ *logical.Request, _ *framework.FieldData) (bool, error) {
 	return false, nil
 }

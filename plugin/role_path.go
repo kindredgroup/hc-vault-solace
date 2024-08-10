@@ -83,7 +83,7 @@ func (b *backend) pathRoleList() *framework.Path {
 	}
 }
 
-func (b *backend) listRoles(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) listRoles(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
 	logger := b.Backend.Logger()
 	b.bLock.RLock()
 	defer b.bLock.RUnlock()
@@ -115,7 +115,7 @@ func (b *backend) fetchRole(ctx context.Context, req *logical.Request, name stri
 		type Role1 struct {
 			Name          string
 			Vpn           string
-			Ttl           string
+			TTL           string
 			ConfigName    string
 			ACLProfile    string
 			ClientProfile string
@@ -125,14 +125,14 @@ func (b *backend) fetchRole(ctx context.Context, req *logical.Request, name stri
 		if err != nil {
 			return nil, err
 		}
-		ttl, err := time.ParseDuration(dr.Ttl + "s")
+		ttl, err := time.ParseDuration(dr.TTL + "s")
 		if err != nil {
 			return nil, err
 		}
 		return &Role{
 			Name:          dr.Name,
 			Vpn:           dr.Vpn,
-			Ttl:           ttl,
+			TTL:           ttl,
 			ConfigName:    dr.ConfigName,
 			ACLProfile:    dr.ACLProfile,
 			ClientProfile: dr.ClientProfile,
@@ -164,7 +164,7 @@ func (b *backend) readRole(ctx context.Context, req *logical.Request, data *fram
 		Data: map[string]interface{}{
 			"name":           dummy.Name,
 			"vpn":            dummy.Vpn,
-			"ttl":            dummy.Ttl,
+			"ttl":            dummy.TTL,
 			"acl_profile":    dummy.ACLProfile,
 			"client_profile": dummy.ClientProfile,
 			"config_name":    dummy.ConfigName,
@@ -190,7 +190,7 @@ func (b *backend) createRole(ctx context.Context, req *logical.Request, data *fr
 	if len(role.Vpn) == 0 {
 		return logical.ErrorResponse("createRole", "vpn is required"), nil
 	}
-	if role.Ttl == 0 {
+	if role.TTL == 0 {
 		return logical.ErrorResponse("ttl is required"), nil
 	}
 	if len(role.ConfigName) == 0 {
@@ -219,7 +219,7 @@ func (b *backend) createRole(ctx context.Context, req *logical.Request, data *fr
 		Data: map[string]interface{}{
 			"name":           role.Name,
 			"Vpn":            role.Vpn,
-			"Ttl":            time.Duration(role.Ttl * time.Second).String(),
+			"ttl":            time.Duration(role.TTL * time.Second).String(),
 			"acl_profile":    role.ACLProfile,
 			"client_profile": role.ClientProfile,
 			"config_name":    role.ConfigName,
@@ -255,34 +255,34 @@ func (b *backend) updateRole(ctx context.Context, req *logical.Request, data *fr
 	}
 	logger.Debug("updateRole", "role from storage", role)
 
-	role_to_update, err := data2role(data)
+	roleToUpdate, err := data2role(data)
 	if err != nil {
 		return logical.ErrorResponse("updateRole", "error", "Missing role name in request"), nil
 	}
-	logger.Debug("updateRole", "role to update", role_to_update)
+	logger.Debug("updateRole", "role to update", roleToUpdate)
 
-	if role.Vpn != role_to_update.Vpn && len(role_to_update.Vpn) > 0 {
-		role.Vpn = role_to_update.Vpn
+	if role.Vpn != roleToUpdate.Vpn && len(roleToUpdate.Vpn) > 0 {
+		role.Vpn = roleToUpdate.Vpn
 	}
 
-	if role.Ttl != role_to_update.Ttl {
-		role.Ttl = role_to_update.Ttl
+	if role.TTL != roleToUpdate.TTL {
+		role.TTL = roleToUpdate.TTL
 	}
 
-	if role.ConfigName != role_to_update.ConfigName && len(role_to_update.ConfigName) > 0 {
-		role.ConfigName = role_to_update.ConfigName
+	if role.ConfigName != roleToUpdate.ConfigName && len(roleToUpdate.ConfigName) > 0 {
+		role.ConfigName = roleToUpdate.ConfigName
 	}
 
-	if role.ACLProfile != role_to_update.ACLProfile && len(role_to_update.ACLProfile) > 0 {
-		role.ACLProfile = role_to_update.ACLProfile
+	if role.ACLProfile != roleToUpdate.ACLProfile && len(roleToUpdate.ACLProfile) > 0 {
+		role.ACLProfile = roleToUpdate.ACLProfile
 	}
 
-	if role.ClientProfile != role_to_update.ClientProfile && len(role_to_update.ClientProfile) > 0 {
-		role.ClientProfile = role_to_update.ClientProfile
+	if role.ClientProfile != roleToUpdate.ClientProfile && len(roleToUpdate.ClientProfile) > 0 {
+		role.ClientProfile = roleToUpdate.ClientProfile
 	}
 
-	if role.UsernamePrefix != role_to_update.UsernamePrefix && len(role_to_update.UsernamePrefix) > 0 {
-		role.UsernamePrefix = role_to_update.UsernamePrefix
+	if role.UsernamePrefix != roleToUpdate.UsernamePrefix && len(roleToUpdate.UsernamePrefix) > 0 {
+		role.UsernamePrefix = roleToUpdate.UsernamePrefix
 	}
 
 	// No way to tell if 'false' came from the data or is just uncheck, so override data2role() here.
@@ -314,7 +314,7 @@ func (b *backend) updateRole(ctx context.Context, req *logical.Request, data *fr
 		Data: map[string]interface{}{
 			"name":           role.Name,
 			"Vpn":            role.Vpn,
-			"Ttl":            time.Duration(role.Ttl * time.Second).String(),
+			"ttl":            time.Duration(role.TTL * time.Second).String(),
 			"acl_profile":    role.ACLProfile,
 			"client_profile": role.ClientProfile,
 			"config_name":    role.ConfigName,

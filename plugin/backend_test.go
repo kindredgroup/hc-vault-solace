@@ -84,11 +84,11 @@ func callBackend(path string, op logical.Operation, vars ...interface{}) (*logic
 			case *logical.Secret:
 				s = v.(*logical.Secret)
 			default:
-				return nil, errors.New(fmt.Sprintf("Wrong type of argument: %s", t))
+				return nil, fmt.Errorf("Wrong type of argument: %s", t)
 			}
 		}
 	} else if len(vars) > 3 {
-		return nil, errors.New(fmt.Sprintf("Wrong number of arguments: %d", len(vars)))
+		return nil, fmt.Errorf("Wrong number of arguments: %d", len(vars))
 	}
 	if b == nil || cfg == nil {
 		b, cfg = getBackend()

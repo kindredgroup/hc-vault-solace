@@ -45,7 +45,7 @@ func TestGetClient(t *testing.T) {
 	validPayload["host"] = solaceHost
 
 	// Cleanup
-	resp, err = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
+	_, err = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
 	if err != nil {
 		t.Error(err)
 	}
@@ -58,14 +58,14 @@ func TestIsActive(t *testing.T) {
 		SolacePath: "",
 		SolaceUser: basicAuthUser,
 		SolacePwd:  basicAuthPwd,
-		DisableTls: true,
+		DisableTLS: true,
 	}
 	b, _ := getBackend(t)
 	r := isActive(cfg.SolaceHost, cfg, b.Logger())
 	if !r {
 		t.Fatal("Message spool is not enabled?")
 	}
-	cfg.DisableTls = false
+	cfg.DisableTLS = false
 	cfg.SolaceHost = "localhost"
 	r = isActive(cfg.SolaceHost, cfg, b.Logger())
 	if r {

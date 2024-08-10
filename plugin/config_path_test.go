@@ -51,8 +51,8 @@ func TestConfigRead(t *testing.T) {
 		t.Fatal(resp.Error())
 	}
 	if resp != nil {
-		t.Fatal("Got response, expected nil!")
 		t.Log(resp)
+		t.Fatal("Got response, expected nil!")
 	}
 }
 

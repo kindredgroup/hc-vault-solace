@@ -12,11 +12,11 @@ type solaceConfig struct {
 	SolacePath string
 	SolaceUser string
 	SolacePwd  string
-	DisableTls bool
+	DisableTLS bool
 }
 
 func (c *solaceConfig) String() string {
-	return fmt.Sprintf("name=%s, solace_host=%s, solace_path=%s, solace_user=%s, solace_pwd=, disable_tls=%t", c.Name, c.SolaceHost, c.SolacePath, c.SolaceUser, c.DisableTls)
+	return fmt.Sprintf("name=%s, solace_host=%s, solace_path=%s, solace_user=%s, solace_pwd=, disable_tls=%t", c.Name, c.SolaceHost, c.SolacePath, c.SolaceUser, c.DisableTLS)
 }
 
 func (c *solaceConfig) toData(vars ...bool) map[string]interface{} {
@@ -31,7 +31,7 @@ func (c *solaceConfig) toData(vars ...bool) map[string]interface{} {
 		"solace_path": c.SolacePath,
 		"solace_user": c.SolaceUser,
 		"solace_pwd":  pwd,
-		"disable_tls": c.DisableTls,
+		"disable_tls": c.DisableTLS,
 	}
 }
 
@@ -64,6 +64,6 @@ func (c *solaceConfig) fromData(data *framework.FieldData) {
 
 	tlsRaw, ok := data.GetOk("disable_tls")
 	if ok {
-		c.DisableTls = tlsRaw.(bool)
+		c.DisableTLS = tlsRaw.(bool)
 	}
 }

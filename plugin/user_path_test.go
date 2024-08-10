@@ -56,12 +56,15 @@ func TestWithRoleAndConfig(t *testing.T) {
 	b, cfg := getBackend(t)
 	userPayload["role"] = nil
 	resp, err := callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !resp.IsError() {
 		t.Fatal("Expected error response from withRoleAndConfig if role is nil")
 	}
 
 	userPath = ("user/")
-	resp, err = callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	_, err = callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
 	if err == nil {
 		t.Fatal("Expected 'unsupported path' error")
 	}

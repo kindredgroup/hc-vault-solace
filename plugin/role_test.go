@@ -32,13 +32,13 @@ func TestRole(t *testing.T) {
 	}
 
 	input.Raw["name"] = nil
-	rl, err = data2role(input)
+	_, err = data2role(input)
 	if err == nil {
 		t.Fatal("Zero-length role name is ok!")
 	}
 
 	delete(input.Raw, "name")
-	rl, err = data2role(input)
+	_, err = data2role(input)
 	if err == nil {
 		t.Fatal("Missing role name is ok!")
 	}

@@ -13,11 +13,10 @@ import (
 
 const (
 	SecretType = "password"
+	MaxTTL = time.Duration(11000000000000000)
 )
 
-var MaxTTL = time.Duration(11000000000000000)
-
-func conf_data(configName string) *framework.FieldData {
+func confData(configName string) *framework.FieldData {
 	return &framework.FieldData{
 		Raw: map[string]interface{}{
 			"config_name": configName,
@@ -98,7 +97,7 @@ func (b *backend) rotateCreds(ctx context.Context, req *logical.Request, data *f
 	}
 	logger.Debug("rotateCreds", "role", role)
 
-	cfg, err := b.fetchConfig(ctx, req, conf_data(role.ConfigName))
+	cfg, err := b.fetchConfig(ctx, req, confData(role.ConfigName))
 	if err != nil {
 		logger.Error("rotateCreds", "error", err)
 		return nil, err
@@ -134,7 +133,7 @@ func (b *backend) rotateCreds(ctx context.Context, req *logical.Request, data *f
 		"role":           role.Name,
 		"acl_profile":    role.ACLProfile,
 		"client_profile": role.ClientProfile,
-		"ttl":            role.Ttl,
+		"ttl":            role.TTL,
 		//"guaranteed_endpoint_permission_override": role.GuaranteedEndpointPermissionOverride,
 		"guaranteed_endpoint_permission_override": true,
 		"subscription_manager":                    role.SubscriptionManager,
@@ -148,7 +147,7 @@ func (b *backend) rotateCreds(ctx context.Context, req *logical.Request, data *f
 	resp := b.Secret(SecretType).Response(secretD, internalD)
 	resp.Secret.MaxTTL = MaxTTL
 
-	resp.Secret.TTL = role.Ttl * time.Second
+	resp.Secret.TTL = role.TTL * time.Second
 	return resp, nil
 
 }
@@ -177,7 +176,7 @@ func (b *backend) revokeCreds(ctx context.Context, req *logical.Request, data *f
 		return logical.ErrorResponse("role not found", "role", roleRaw.(string)), nil
 	}
 
-	cfg, err := b.fetchConfig(ctx, req, conf_data(role.ConfigName))
+	cfg, err := b.fetchConfig(ctx, req, confData(role.ConfigName))
 	if err != nil {
 		logger.Error("rotateCreds", "error", err)
 		return nil, err

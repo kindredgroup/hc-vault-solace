@@ -2,7 +2,6 @@ package solace
 
 import (
 	"context"
-	"fmt"
 	logical "github.com/hashicorp/vault/sdk/logical"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ const (
 	testRolePath                         = "roles/test1role"
 	wrongRole                            = "does-not-exist"
 	wrongRolePath                        = "roles/does-not-exist"
-	credTtl                              = 1
+	credTTL                              = 1
 	guaranteedEndpointPermissionOverride = true
 	testUserPrefix                       = "slowBoring"
 )
@@ -55,7 +54,7 @@ func createRole(b logical.Backend, cfg *logical.BackendConfig) (*logical.Respons
 	pl := map[string]interface{}{
 		"name":            testRoleName,
 		"vpn":             testVpn,
-		"ttl":             credTtl,
+		"ttl":             credTTL,
 		"acl_profile":     aclProfile,
 		"client_profile":  nil,
 		"config_name":     "default",
@@ -113,6 +112,9 @@ func TestCreateRole(t *testing.T) {
 	if resp != nil {
 		t.Fatal("Found deleted role")
 	}
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestReadRole(t *testing.T) {
@@ -143,14 +145,17 @@ func TestDeleteRole(t *testing.T) {
 
 func TestUpdateRole(t *testing.T) {
 	b, cfg := getBackend(t)
-	resp, err := createRole(b, cfg)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	pl := map[string]interface{}{
 		"name":           testRoleName,
 		"ttl":            "0s",
 		"acl_profile":    aclProfile,
 		"client_profile": clientProfile,
 	}
-	resp, err = b.HandleRequest(context.Background(), &logical.Request{
+	resp, err := b.HandleRequest(context.Background(), &logical.Request{
 		Operation: logical.UpdateOperation,
 		Path:      testRolePath,
 		Data:      pl,
@@ -174,28 +179,29 @@ func TestUpdateRole(t *testing.T) {
 	t.Log(resp.Data)
 	role := Role{
 		Vpn:                                  resp.Data["vpn"].(string),
-		Ttl:                                  time.Duration(resp.Data["ttl"].(time.Duration)),
+		TTL:                                  time.Duration(resp.Data["ttl"].(time.Duration)),
 		ACLProfile:                           resp.Data["acl_profile"].(string),
 		ClientProfile:                        resp.Data["client_profile"].(string),
 		GuaranteedEndpointPermissionOverride: resp.Data["guaranteed_endpoint_permission_override"].(bool),
 		UsernamePrefix:                       resp.Data["username_prefix"].(string),
 	}
-	if role.Ttl.String() != pl["ttl"] {
-		t.Fatal("TTLs are different, ttl set = " + pl["ttl"].(string) + ", ttl received = " + role.Ttl.String())
+	if role.TTL.String() != pl["ttl"] {
+	        t.Fatal("TTLs are different, ttl set = " + pl["ttl"].(string) + ", ttl received = " + role.TTL.String())
 	}
+
 	if role.Vpn != testVpn {
 		t.Fatal("Vpn disappeared")
 	}
 	if role.ACLProfile != aclProfile {
-		t.Fatal("ACL profile disappeared, profile read = " + resp.Data["acl_profile"].(string))
+		t.Fatalf("ACL profile disappeared, profile read = %s", resp.Data["acl_profile"].(string))
 	}
 	if role.ClientProfile != clientProfile {
 		t.Fatal("Client profile disappeared")
 	}
 	if role.GuaranteedEndpointPermissionOverride != guaranteedEndpointPermissionOverride {
-		t.Fatal(fmt.Sprintf("GuaranteedEndpointPermissionOverride received: %t, needed: %t", role.GuaranteedEndpointPermissionOverride, guaranteedEndpointPermissionOverride))
+		t.Fatalf("GuaranteedEndpointPermissionOverride received: %t, needed: %t", role.GuaranteedEndpointPermissionOverride, guaranteedEndpointPermissionOverride)
 	}
 	if role.UsernamePrefix != testUserPrefix {
-		t.Fatal(fmt.Sprintf("Received username_prefix: %s, expected: %s", role.UsernamePrefix, testUserPrefix))
+		t.Fatalf("Received username_prefix: %s, expected: %s", role.UsernamePrefix, testUserPrefix)
 	}
 }

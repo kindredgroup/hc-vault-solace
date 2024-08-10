@@ -7,7 +7,6 @@ import (
 	"github.com/go-openapi/strfmt"
 	hclog "github.com/hashicorp/go-hclog"
 	"io"
-	"io/ioutil"
 	all "kindredgroup.com/solace-plugin/gen/solaceapi/all"
 	"net/http"
 	"net/url"
@@ -17,7 +16,7 @@ import (
 // getClient returns SEMP v2 client
 func getClient(cfg *solaceConfig, logger hclog.Logger) (all.ClientService, error) {
 	accessSchemes := []string{"http", "https"}
-	if cfg.DisableTls {
+	if cfg.DisableTLS {
 		accessSchemes = []string{"http"}
 	}
 	hosts := strings.Split(cfg.SolaceHost, ",")
@@ -58,7 +57,7 @@ func getPrimary(hosts []string, cfg *solaceConfig, logger hclog.Logger) string {
 func isActive(host string, cfg *solaceConfig, logger hclog.Logger) bool {
 	var scheme string
 	logger.Debug("Host: " + host)
-	if cfg.DisableTls {
+	if cfg.DisableTLS {
 		scheme = "http"
 	} else {
 		scheme = "https"
@@ -87,7 +86,7 @@ func isActive(host string, cfg *solaceConfig, logger hclog.Logger) bool {
 		logger.Info("isActive", "Got response code", resp.Status)
 		return false
 	}
-	out, err := ioutil.ReadAll(resp.Body)
+	out, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error("isActive", "error while reading response body", err.Error())
 		return false
