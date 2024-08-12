@@ -1,4 +1,4 @@
-# Hashicorp Vault Solace plugin
+# Hashicorp Vault Solace PubSub+ plugin
 
 This is custom secrets engine for Vault which generates dynamic credentials for [Solace PubSub+](https://solace.com/).
 
