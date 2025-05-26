@@ -8,7 +8,7 @@ Vault Docker images used for testing are based on Alpine Linux (musl), so they n
 ```
 [dev|pripii@priitp-roadkill ]$ mkdir $GOPATH/src/kindredgroup.com && cd $GOPATH/src/kindredgroup.com
 [dev|pripii@priitp-roadkill kindredgroup.com]$ git clone https://github.com/kindredgroup/hc-vault-solace solace-plugin && cd solace-plugin
-[dev|pripii@priitp-roadkill solace-plugin]$ podman run -i --rm -v `pwd`:/build -w /build golang:1.21.11-alpine go build -tags netgo,osusergo -v
+[dev|pripii@priitp-roadkill solace-plugin]$ podman run -i --rm -v `pwd`:/build -w /build golang:1.24.3-alpine go build -tags netgo,osusergo -v
 ```
 This creates the file `solace-plugin` in the current directory.
 
