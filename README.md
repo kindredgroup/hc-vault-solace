@@ -16,10 +16,10 @@ This creates the file `solace-plugin` in the current directory.
 
 Assuming that binary is copied to `/vault/plugins/solace-plugin`:
 ```
-/ # sha256sum /vault/plugins/solace-plugin-v0.0.45
+/ # sha256sum /vault/plugins/solace-plugin-v0.0.54
 # Next is needed with official vault docker image
-/ # setcap cap_ipc_lock=+ep /vault/plugins/solace-plugin-v0.0.45
-/ # vault write sys/plugins/catalog/secret/solace-plugin sha256=<something-something> command="solace-plugin-v0.0.45"
+/ # setcap cap_ipc_lock=+ep /vault/plugins/solace-plugin-v0.0.54
+/ # vault write sys/plugins/catalog/secret/solace-plugin sha256=<something-something> command="solace-plugin-v0.0.54"
 / # vault secrets enable secret/solace-plugin
 ```
 
@@ -27,8 +27,8 @@ Assuming that binary is copied to `/vault/plugins/solace-plugin`:
 
 Since plugin is versioned it can't be just installed, it has to be upgraded. As a bonus, if upgrade fails vault will fall back to the previous version of the plugin.
 ```
-$PLUGIN="/vault/plugins/solace-plugin-v0.0.52"
-$PLUGIN_VERSION="v0.0.45"
+$PLUGIN="/vault/plugins/solace-plugin-v0.0.54"
+$PLUGIN_VERSION="v0.0.54"
 setcap cap_ipc_lock=+ep $PLUGIN
 HASH=`sha256sum $PLUGIN|cut -d ' ' -f 1`
 vault plugin register -sha256="$HASH" -command=solace-plugin-$PLUGIN_VERSION -version=$PLUGIN_VERSION secret solace-plugin
