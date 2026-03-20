@@ -76,3 +76,60 @@ func TestWithRoleAndConfig(t *testing.T) {
 		t.Fatal("Expected 'unsupported path' error")
 	}
 }
+
+func TestWithRoleAndConfigRoleNotFound(t *testing.T) {
+	b, cfg := getBackend(t)
+	// Set up config but don't create the role
+	validPayload := getValidPayload()
+	err := writeConfig(validPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userPayload := map[string]interface{}{
+		"role": "nonexistent-role",
+	}
+	userPath := fmt.Sprintf("user/%s", testUser)
+	resp, err := callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response when role does not exist")
+	}
+	if resp.Error().Error() != "withRoleAndConfig: role 'nonexistent-role' not found" {
+		t.Fatalf("Unexpected error message: %s", resp.Error().Error())
+	}
+}
+
+func TestWithRoleAndConfigMissingConfig(t *testing.T) {
+	b, cfg := getBackend(t)
+	// Create a role that references a non-existent config
+	rolePayload := map[string]interface{}{
+		"name":        "test-role-bad-config",
+		"vpn":         testVpn(),
+		"ttl":         "1s",
+		"acl_profile": aclProfile(),
+		"config_name": "nonexistent-config",
+	}
+	_, err := callBackend("roles/test-role-bad-config", logical.CreateOperation, rolePayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userPayload := map[string]interface{}{
+		"role": "test-role-bad-config",
+	}
+	userPath := fmt.Sprintf("user/%s", testUser)
+
+	// NOTE: This test documents a bug - withRoleAndConfig doesn't check if config is nil
+	// before passing it to getClient, which causes a panic. The test uses recover to
+	// catch the panic. This should be fixed in withRoleAndConfig.
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("Expected panic when config does not exist, but got none")
+		}
+	}()
+
+	callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+}
