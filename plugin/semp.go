@@ -2,6 +2,7 @@ package solace
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,8 +16,10 @@ import (
 )
 
 const (
-	sempV1Path         = "/SEMP"
-	msgSpoolXMLRequest = "<rpc><show><message-spool/></show></rpc>"
+	sempV1Path          = "/SEMP"
+	msgSpoolXMLRequest  = "<rpc><show><message-spool/></show></rpc>"
+	configStatusKey     = "config-status"
+	configStatusPrimary = "Enabled (Primary)"
 )
 
 // getSchemes returns the URL schemes to use based on TLS configuration.
@@ -71,7 +74,7 @@ func getPrimary(hosts []string, cfg *solaceConfig, logger hclog.Logger) string {
 
 // isActive tries to figure out if Solace box is active in HA setup. It uses SEMP v1 since
 // message spool info isn't exposed through v2 at the moment. solaceConfig is used for the
-// credentials and TLS toggle, SolaceHost is ignored. Is logs some errors in info level
+// credentials and TLS toggle, SolaceHost is ignored. It logs some errors at info level
 // since errors from non-operational host might be confusing.
 func isActive(host string, cfg *solaceConfig, logger hclog.Logger) bool {
 	logger.Debug("Host: " + host)
@@ -90,7 +93,7 @@ func isActive(host string, cfg *solaceConfig, logger hclog.Logger) bool {
 	}
 	defer resp.Body.Close()
 
-	if !strings.HasPrefix(resp.Status, "200") {
+	if resp.StatusCode != http.StatusOK {
 		logger.Info("isActive", "Got response code", resp.Status)
 		return false
 	}
@@ -101,23 +104,40 @@ func isActive(host string, cfg *solaceConfig, logger hclog.Logger) bool {
 		return false
 	}
 
-	sp, err := mxj.NewMapXml(out)
+	isPrimary, err := parseConfigStatus(out)
 	if err != nil {
-		logger.Error("isActive", "error parsing XML", err.Error())
+		logger.Error("isActive", "error parsing config status", err.Error())
 		return false
 	}
 
-	configStatus, err := sp.ValuesForKey("config-status")
+	if !isPrimary {
+		logger.Debug("isActive", "message spool status", "not primary")
+	}
+	return isPrimary
+}
+
+// parseConfigStatus parses SEMP v1 XML response and returns true if the broker is primary.
+func parseConfigStatus(xmlData []byte) (bool, error) {
+	sp, err := mxj.NewMapXml(xmlData)
 	if err != nil {
-		logger.Error(err.Error())
-		return false
+		return false, fmt.Errorf("error parsing XML: %w", err)
 	}
 
-	if (configStatus[0].(string)) == "Enabled (Primary)" {
-		return true
+	configStatus, err := sp.ValuesForKey(configStatusKey)
+	if err != nil {
+		return false, fmt.Errorf("error getting config-status key: %w", err)
 	}
-	logger.Debug("Message spool status: " + configStatus[0].(string))
-	return false
+
+	if len(configStatus) == 0 {
+		return false, errors.New("config-status not found in response")
+	}
+
+	status, ok := configStatus[0].(string)
+	if !ok {
+		return false, fmt.Errorf("config-status is not a string: %T", configStatus[0])
+	}
+
+	return status == configStatusPrimary, nil
 }
 
 // newSEMPv1Request creates an HTTP request for SEMP v1 API calls

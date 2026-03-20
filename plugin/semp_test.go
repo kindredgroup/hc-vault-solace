@@ -2,6 +2,7 @@ package solace
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	log "github.com/hashicorp/go-hclog"
@@ -137,6 +138,107 @@ func TestGetScheme(t *testing.T) {
 			got := getScheme(cfg)
 			if got != tt.want {
 				t.Errorf("getScheme() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseConfigStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		xmlData   string
+		want      bool
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name: "primary broker",
+			xmlData: `<?xml version="1.0"?>
+				<rpc-reply>
+					<rpc>
+						<show>
+							<message-spool>
+								<config-status>Enabled (Primary)</config-status>
+							</message-spool>
+						</show>
+					</rpc>
+				</rpc-reply>`,
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "standby broker",
+			xmlData: `<?xml version="1.0"?>
+				<rpc-reply>
+					<rpc>
+						<show>
+							<message-spool>
+								<config-status>Enabled (Standby)</config-status>
+							</message-spool>
+						</show>
+					</rpc>
+				</rpc-reply>`,
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name:      "empty XML",
+			xmlData:   `<?xml version="1.0"?><rpc-reply></rpc-reply>`,
+			want:      false,
+			wantErr:   true,
+			errSubstr: "config-status not found",
+		},
+		{
+			name:      "invalid XML",
+			xmlData:   `not valid xml`,
+			want:      false,
+			wantErr:   true,
+			errSubstr: "error parsing XML",
+		},
+		{
+			name:      "empty input",
+			xmlData:   ``,
+			want:      false,
+			wantErr:   true,
+			errSubstr: "error parsing XML",
+		},
+		{
+			name: "missing config-status key",
+			xmlData: `<?xml version="1.0"?>
+				<rpc-reply>
+					<rpc>
+						<show>
+							<message-spool>
+								<other-key>some value</other-key>
+							</message-spool>
+						</show>
+					</rpc>
+				</rpc-reply>`,
+			want:      false,
+			wantErr:   true,
+			errSubstr: "config-status not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseConfigStatus([]byte(tt.xmlData))
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseConfigStatus() expected error containing %q, got nil", tt.errSubstr)
+					return
+				}
+				if tt.errSubstr != "" && !strings.Contains(err.Error(), tt.errSubstr) {
+					t.Errorf("parseConfigStatus() error = %v, want error containing %q", err, tt.errSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("parseConfigStatus() unexpected error = %v", err)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("parseConfigStatus() = %v, want %v", got, tt.want)
 			}
 		})
 	}
