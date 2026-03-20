@@ -176,8 +176,6 @@ func createSolaceUser(cfg *solaceConfig, role *Role, username string, pwd string
 		Password:          pwd,
 		ACLProfileName:    role.ACLProfile,
 		ClientProfileName: role.ClientProfile,
-		// FIXME: by the special request from PE...
-		// GuaranteedEndpointPermissionOverrideEnabled: role.GuaranteedEndpointPermissionOverride,
 		GuaranteedEndpointPermissionOverrideEnabled: true,
 		SubscriptionManagerEnabled:                  role.SubscriptionManager,
 	}
