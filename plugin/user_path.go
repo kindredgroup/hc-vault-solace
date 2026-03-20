@@ -71,10 +71,14 @@ func (b *backend) withRoleAndConfig(ctx context.Context, req *logical.Request, d
 		logger.Error("withRoleAndConfig", "error", err)
 		return nil, err
 	}
+	if cfg == nil {
+		logger.Error("withRoleAndConfig", "error", hclog.Fmt("config '%v' not found", role.ConfigName))
+		return logical.ErrorResponse(fmt.Sprintf("withRoleAndConfig: config '%v' not found", role.ConfigName)), nil
+	}
 
 	userRaw, ok := data.GetOk("username")
 	if !ok {
-		logical.ErrorResponse("missing username")
+		return logical.ErrorResponse("missing username"), nil
 	}
 	user := userRaw.(string)
 

@@ -121,15 +121,14 @@ func TestWithRoleAndConfigMissingConfig(t *testing.T) {
 		"role": "test-role-bad-config",
 	}
 	userPath := fmt.Sprintf("user/%s", testUser)
-
-	// NOTE: This test documents a bug - withRoleAndConfig doesn't check if config is nil
-	// before passing it to getClient, which causes a panic. The test uses recover to
-	// catch the panic. This should be fixed in withRoleAndConfig.
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("Expected panic when config does not exist, but got none")
-		}
-	}()
-
-	callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	resp, err := callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response when config does not exist")
+	}
+	if resp.Error().Error() != "withRoleAndConfig: config 'nonexistent-config' not found" {
+		t.Fatalf("Unexpected error message: %s", resp.Error().Error())
+	}
 }
