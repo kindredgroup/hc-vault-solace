@@ -94,20 +94,20 @@ func sempRequest(sc *SolaceContainer, method, path string, body interface{}) err
 // createMsgVPN creates a message VPN with basic settings enabled
 func createMsgVPN(sc *SolaceContainer, vpnName string) error {
 	body := map[string]interface{}{
-		"msgVpnName":                     vpnName,
-		"enabled":                        true,
-		"authenticationBasicEnabled":    true,
-		"authenticationBasicType":       "internal",
-		"maxMsgSpoolUsage":              1500,
-		"maxConnectionCount":            100,
-		"maxEgressFlowCount":            100,
-		"maxIngressFlowCount":           100,
-		"maxSubscriptionCount":          500000,
-		"maxTransactedSessionCount":     100,
-		"maxTransactionCount":           5000,
-		"sempOverMsgBusAdminEnabled":    true,
-		"sempOverMsgBusEnabled":         true,
-		"sempOverMsgBusShowEnabled":     true,
+		"msgVpnName":                 vpnName,
+		"enabled":                    true,
+		"authenticationBasicEnabled": true,
+		"authenticationBasicType":    "internal",
+		"maxMsgSpoolUsage":           1500,
+		"maxConnectionCount":         100,
+		"maxEgressFlowCount":         100,
+		"maxIngressFlowCount":        100,
+		"maxSubscriptionCount":       500000,
+		"maxTransactedSessionCount":  100,
+		"maxTransactionCount":        5000,
+		"sempOverMsgBusAdminEnabled": true,
+		"sempOverMsgBusEnabled":      true,
+		"sempOverMsgBusShowEnabled":  true,
 	}
 
 	return sempRequest(sc, http.MethodPost, "/msgVpns", body)
@@ -116,12 +116,12 @@ func createMsgVPN(sc *SolaceContainer, vpnName string) error {
 // createACLProfile creates an ACL profile in the specified VPN
 func createACLProfile(sc *SolaceContainer, vpnName, aclProfileName string) error {
 	body := map[string]interface{}{
-		"aclProfileName":                    aclProfileName,
-		"msgVpnName":                        vpnName,
-		"clientConnectDefaultAction":        "allow",
-		"publishTopicDefaultAction":         "allow",
-		"subscribeTopicDefaultAction":       "allow",
-		"subscribeShareNameDefaultAction":   "allow",
+		"aclProfileName":                  aclProfileName,
+		"msgVpnName":                      vpnName,
+		"clientConnectDefaultAction":      "allow",
+		"publishTopicDefaultAction":       "allow",
+		"subscribeTopicDefaultAction":     "allow",
+		"subscribeShareNameDefaultAction": "allow",
 	}
 
 	path := fmt.Sprintf("/msgVpns/%s/aclProfiles", vpnName)
@@ -131,18 +131,18 @@ func createACLProfile(sc *SolaceContainer, vpnName, aclProfileName string) error
 // createClientProfile creates a client profile in the specified VPN
 func createClientProfile(sc *SolaceContainer, vpnName, clientProfileName string) error {
 	body := map[string]interface{}{
-		"clientProfileName":                          clientProfileName,
-		"msgVpnName":                                 vpnName,
-		"allowGuaranteedMsgSendEnabled":              true,
-		"allowGuaranteedMsgReceiveEnabled":           true,
-		"allowGuaranteedEndpointCreateEnabled":       true,
-		"allowTransactedSessionsEnabled":             true,
-		"maxEndpointCountPerClientUsername":          100,
-		"maxIngressFlowCount":                        100,
-		"maxEgressFlowCount":                         100,
-		"maxSubscriptionCount":                       500000,
-		"maxTransactedSessionCount":                  10,
-		"maxTransactionCount":                        100,
+		"clientProfileName":                    clientProfileName,
+		"msgVpnName":                           vpnName,
+		"allowGuaranteedMsgSendEnabled":        true,
+		"allowGuaranteedMsgReceiveEnabled":     true,
+		"allowGuaranteedEndpointCreateEnabled": true,
+		"allowTransactedSessionsEnabled":       true,
+		"maxEndpointCountPerClientUsername":    100,
+		"maxIngressFlowCount":                  100,
+		"maxEgressFlowCount":                   100,
+		"maxSubscriptionCount":                 500000,
+		"maxTransactedSessionCount":            10,
+		"maxTransactionCount":                  100,
 	}
 
 	path := fmt.Sprintf("/msgVpns/%s/clientProfiles", vpnName)
@@ -152,14 +152,14 @@ func createClientProfile(sc *SolaceContainer, vpnName, clientProfileName string)
 // createClientUsername creates a client username in the specified VPN
 func createClientUsername(sc *SolaceContainer, vpnName, username, password, aclProfile, clientProfile string) error {
 	body := map[string]interface{}{
-		"clientUsername":                             username,
-		"msgVpnName":                                 vpnName,
-		"password":                                   password,
-		"enabled":                                    true,
-		"aclProfileName":                             aclProfile,
-		"clientProfileName":                          clientProfile,
+		"clientUsername":    username,
+		"msgVpnName":        vpnName,
+		"password":          password,
+		"enabled":           true,
+		"aclProfileName":    aclProfile,
+		"clientProfileName": clientProfile,
 		"guaranteedEndpointPermissionOverrideEnabled": true,
-		"subscriptionManagerEnabled":                 false,
+		"subscriptionManagerEnabled":                  false,
 	}
 
 	path := fmt.Sprintf("/msgVpns/%s/clientUsernames", vpnName)
