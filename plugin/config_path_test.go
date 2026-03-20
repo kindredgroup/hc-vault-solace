@@ -7,17 +7,23 @@ import (
 	logical "github.com/hashicorp/vault/sdk/logical"
 )
 
-var validPayload = map[string]interface{}{
-	"name":        configPath,
-	"host":        solaceHost,
-	"username":    basicAuthUser,
-	"password":    basicAuthPwd,
-	"disable_tls": true,
+// getValidPayload returns a fresh payload map with current test config values
+func getValidPayload() map[string]interface{} {
+	return map[string]interface{}{
+		"name":        configPath,
+		"host":        solaceHost,
+		"username":    basicAuthUser(),
+		"password":    basicAuthPwd(),
+		"disable_tls": true,
+	}
 }
 
-var invalidPayload = map[string]interface{}{
-	"host":     solaceHost,
-	"password": basicAuthPwd,
+// getInvalidPayload returns an invalid payload for testing
+func getInvalidPayload() map[string]interface{} {
+	return map[string]interface{}{
+		"host":     solaceHost,
+		"password": basicAuthPwd(),
+	}
 }
 
 var namePayload = map[string]interface{}{
@@ -33,6 +39,7 @@ var configName = strings.Split(configPath, "/")[1]
 
 func TestListConfigs(t *testing.T) {
 	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
 	writeConfig(validPayload, b, cfg)
 	if !fetchAndCheckOne(t, b, cfg, "configs/", configName) {
 		t.Fatal("Config not found: " + configName)
@@ -92,6 +99,7 @@ func TestUpdateNewConfig(t *testing.T) {
 
 func newConfigTester(t *testing.T, creater func(payload map[string]interface{}, b logical.Backend, cfg *logical.BackendConfig) error) {
 	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
 	err := creater(validPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -113,11 +121,11 @@ func newConfigTester(t *testing.T, creater func(payload map[string]interface{}, 
 	if conf["solace_host"] != solaceHost {
 		t.Fatal("Got host = " + conf["solace_host"].(string) + ", need " + solaceHost)
 	}
-	if conf["solace_user"].(string) != basicAuthUser {
-		t.Fatal("Got username = " + conf["solace_user"].(string) + ", need " + basicAuthUser)
+	if conf["solace_user"].(string) != basicAuthUser() {
+		t.Fatal("Got username = " + conf["solace_user"].(string) + ", need " + basicAuthUser())
 	}
 	if conf["solace_pwd"].(string) != mangledPwd {
-		t.Fatal("Got password = " + conf["solace_pwd"].(string) + ", need " + basicAuthPwd)
+		t.Fatal("Got password = " + conf["solace_pwd"].(string) + ", need " + basicAuthPwd())
 	}
 	if conf["solace_path"].(string) != SolacePrefix {
 		t.Fatal("Got path = " + conf["solace_path"].(string) + ", need " + SolacePrefix)
@@ -127,6 +135,7 @@ func newConfigTester(t *testing.T, creater func(payload map[string]interface{}, 
 
 func TestWriteJunkConfig(t *testing.T) {
 	b, cfg := getBackend(t)
+	invalidPayload := getInvalidPayload()
 	err := writeConfig(invalidPayload, b, cfg)
 	if err == nil {
 		t.Fatal("Writing junk config succeeded")
@@ -137,6 +146,7 @@ func TestUpdateConfig(t *testing.T) {
 	updatedUser := "vaultadmin"
 
 	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
 	err := writeConfig(validPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -163,6 +173,7 @@ func TestUpdateConfig(t *testing.T) {
 }
 func TestDeleteConfig(t *testing.T) {
 	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
 	err := writeConfig(validPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)

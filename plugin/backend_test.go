@@ -4,32 +4,79 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"testing"
 
 	log "github.com/hashicorp/go-hclog"
 	logical "github.com/hashicorp/vault/sdk/logical"
-	"testing"
 )
 
-// Constants and common functions/helpers for tests
-const (
-	// First hostname does not have Solace responding
-	solaceHost = "localhost,localhost:8090"
-	//        solacePath = "SEMP/v2/config"
-	solacePath    = ""
-	basicAuthUser = "gotest"
-	basicAuthPwd  = "test123"
-	expectedVpns  = 2
+// Package-level variables for test configuration (set by TestMain)
+var (
+	// solaceHost is dynamically set from the testcontainer
+	solaceHost string
+	// Test fixtures loaded from container setup
+	testFixtures *TestFixtures
+	// Container reference for cleanup
+	testContainer *SolaceContainer
+)
 
-	testVpn       = "testvpn0"
-	testPassword  = "changeoninstall"
-	testUsername  = "testCclient0"
-	aclProfile    = "test_acl_profile"
-	clientProfile = "test_client_profile"
+// Constants that don't change
+const (
+	solacePath   = ""
+	testPassword = "changeoninstall"
+	testUsername = "testCclient0"
 
 	testUserPath = "user/testvpn0/testclient0"
 	configPath   = "config/default"
 	logLevel     = "info"
 )
+
+// Computed values from fixtures (set after TestMain)
+func basicAuthUser() string { return testFixtures.AdminUser }
+func basicAuthPwd() string  { return testFixtures.AdminPwd }
+func testVpn() string       { return testFixtures.VPNName }
+func aclProfile() string    { return testFixtures.ACLProfile }
+func clientProfile() string { return testFixtures.ClientProfile }
+
+// TestMain sets up the Solace testcontainer and fixtures before running tests
+func TestMain(m *testing.M) {
+	ctx := context.Background()
+
+	// Check if Docker is available - if not, we can't run integration tests
+	if SkipIfNoDocker() {
+		fmt.Fprintln(os.Stderr, "Docker/Podman not available, skipping integration tests")
+		fmt.Fprintln(os.Stderr, "Set SKIP_DOCKER_TESTS=1 to silence this message")
+		os.Exit(0)
+	}
+
+	// Start Solace container
+	var err error
+	testContainer, err = StartSolaceContainer(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start Solace container: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Set up dynamic connection info
+	solaceHost = testContainer.Host
+
+	// Create test fixtures (VPN, profiles, etc.)
+	testFixtures, err = SetupTestFixtures(testContainer)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to setup test fixtures: %v\n", err)
+		testContainer.Terminate(ctx)
+		os.Exit(1)
+	}
+
+	// Run tests
+	code := m.Run()
+
+	// Cleanup
+	testContainer.Terminate(ctx)
+
+	os.Exit(code)
+}
 
 // getBackend initializes and returns test backend & config.
 // Factory() can fail. Callers from tests will pass *testing.T, rest is expected to check if

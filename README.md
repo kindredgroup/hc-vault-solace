@@ -188,16 +188,60 @@ Plugin source tree contains only a small subset of the SEMP2 API which is actual
 
 ### Tests
 
+Tests use [testcontainers-go](https://github.com/testcontainers/testcontainers-go) to automatically start a Solace PubSub+ Standard container for integration testing.
+
+**Requirements:**
+- Docker or Podman installed and running
+- For rootless Podman: UID range in `/etc/subuid` must include 1000001 (Solace container requirement)
+- The Solace container image will be pulled automatically on first run
+
+**Running tests:**
 ```bash
 cd plugin && go test -v
 ```
 
-Tests use Vault test backend, but connect to the live Solace. Config parameters are in `backend_test.go`. 
-
-In case of issues, setting DEBUG environment variable to something makes generated api to produce copious amount of debug info, including
-requests and responses. For example:
+**With Podman:**
+If using Podman without Docker socket, start the API service first:
 ```bash
-[pripii@priitp-roadkill solace-plugin]$ DEBUG=nihao go test -run TestApiDeleteUser
+# Start Podman API service
+podman system service --time=0 unix:///tmp/podman.sock &
+
+# Run tests with DOCKER_HOST and disable reaper (not needed for cleanup)
+DOCKER_HOST=unix:///tmp/podman.sock TESTCONTAINERS_RYUK_DISABLED=true go test -v ./plugin/
+```
+
+**Rootless Podman without systemd/dbus:**
+If running rootless Podman in an environment without systemd user session or dbus (e.g., SSH sessions, containers), the default network mode may fail with aardvark-dns errors. Use the `slirp4netns` network mode:
+```bash
+# Start Podman API service in a custom location
+mkdir -p /tmp/podman-run
+podman system service --time=0 unix:///tmp/podman-run/podman.sock &
+
+# Run tests with slirp4netns network mode enabled
+DOCKER_HOST=unix:///tmp/podman-run/podman.sock \
+TESTCONTAINERS_RYUK_DISABLED=true \
+TESTCONTAINERS_PODMAN_SLIRP4NETNS=1 \
+go test -v ./plugin/
+```
+
+**First run note:** The initial test run may take a few minutes as it pulls the `solace/solace-pubsub-standard:latest` image (~1.5GB) and waits for the container to fully initialize (up to 2 minutes).
+
+**Environment variables:**
+- `SKIP_DOCKER_TESTS=1` - Skip tests when Docker is not available (useful in CI without Docker)
+- `DOCKER_HOST` - Docker/Podman socket path (e.g., `unix:///tmp/podman.sock`)
+- `TESTCONTAINERS_RYUK_DISABLED=true` - Disable the reaper container (recommended for Podman)
+- `TESTCONTAINERS_PODMAN_SLIRP4NETNS=1` - Use slirp4netns network mode for rootless Podman without systemd/dbus
+
+**Without Docker:**
+If Docker/Podman is not available, tests will be skipped automatically with a message:
+```
+Docker/Podman not available, skipping integration tests
+```
+
+**Debug mode:**
+Setting DEBUG environment variable produces verbose API output including requests and responses:
+```bash
+DEBUG=nihao go test -run TestApiDeleteUser
 DELETE /SEMP/v2/config/msgVpns/testvpn0/clientUsernames/client0 HTTP/1.1
 Host: localhost:8080
 User-Agent: Go-http-client/1.1

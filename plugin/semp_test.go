@@ -23,7 +23,9 @@ func TestGetClientFail(t *testing.T) {
 
 func TestGetClient(t *testing.T) {
 	b, cfg := getBackend(t)
-	validPayload["host"] = "localhost:8080,localhost:8090"
+	validPayload := getValidPayload()
+	// Use two hosts to test failover logic - first is a fake port, second is the real container
+	validPayload["host"] = "localhost:9999," + solaceHost
 	err := writeConfig(validPayload, b, cfg)
 	if err != nil {
 		t.Error(err)
@@ -31,7 +33,7 @@ func TestGetClient(t *testing.T) {
 	createRole(b, cfg)
 	userPath := fmt.Sprintf("user/%s", testUser)
 	// We expect CallBackend() to fail if something goes wrong with the SEMP client configuration
-	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
+	resp, err := callBackend(userPath, logical.CreateOperation, getUserPayload(), b, cfg)
 	if err != nil {
 		t.Error(err)
 	}
@@ -42,10 +44,8 @@ func TestGetClient(t *testing.T) {
 		t.Fatal(resp.Error())
 	}
 
-	validPayload["host"] = solaceHost
-
 	// Cleanup
-	_, err = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
+	_, err = callBackend(userPath, logical.DeleteOperation, getUserPayload(), b, cfg)
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,10 +54,10 @@ func TestGetClient(t *testing.T) {
 
 func TestIsActive(t *testing.T) {
 	cfg := &solaceConfig{
-		SolaceHost: "localhost:8090",
+		SolaceHost: solaceHost,
 		SolacePath: "",
-		SolaceUser: basicAuthUser,
-		SolacePwd:  basicAuthPwd,
+		SolaceUser: basicAuthUser(),
+		SolacePwd:  basicAuthPwd(),
 		DisableTLS: true,
 	}
 	b, _ := getBackend(t)

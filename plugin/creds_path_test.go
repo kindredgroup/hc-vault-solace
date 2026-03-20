@@ -16,6 +16,7 @@ var rotateTestCredsPath = "creds/" + testRoleName
 func TestRotateCreds(t *testing.T) {
 	b, cfg := getBackend(t)
 
+	validPayload := getValidPayload()
 	err := writeConfig(validPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +38,7 @@ func TestRotateCreds(t *testing.T) {
 	secret := resp.Secret
 
 	userPath := fmt.Sprintf("user/%s", resp.Data["username"])
+	userPayload := getUserPayload()
 	resp, err = callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -46,14 +48,14 @@ func TestRotateCreds(t *testing.T) {
 	}
 
 	acl := resp.Data["acl_profile"].(string)
-	if acl != aclProfile {
-		t.Fatal("Expected ACL profile" + aclProfile + ", received " + acl)
+	if acl != aclProfile() {
+		t.Fatal("Expected ACL profile" + aclProfile() + ", received " + acl)
 	}
 
 	// clientProfile is unset, expecting to receive "default" back from Solace
-	clientProfile := resp.Data["client_profile"].(string)
-	if clientProfile != "default" {
-		t.Fatal("Somehow received client profile: " + clientProfile)
+	cp := resp.Data["client_profile"].(string)
+	if cp != "default" {
+		t.Fatal("Somehow received client profile: " + cp)
 	}
 	gepo := resp.Data["guaranteed_endpoint_permission_override"].(bool)
 	if gepo != guaranteedEndpointPermissionOverride {
@@ -78,7 +80,7 @@ func TestRotateCreds(t *testing.T) {
 		t.Fatal(resp.Error())
 	}
 
-	resp, err = callBackend(fmt.Sprintf("user/%s/%s", testVpn, user), logical.ReadOperation, pl, b, cfg)
+	resp, err = callBackend(fmt.Sprintf("user/%s/%s", testVpn(), user), logical.ReadOperation, pl, b, cfg)
 
 	// User should have been dropped, so expect error here
 	if err == nil {
@@ -96,6 +98,7 @@ func TestRotateCreds(t *testing.T) {
 func TestPrefixCreds(t *testing.T) {
 	b, cfg := getBackend(t)
 
+	validPayload := getValidPayload()
 	err := writeConfig(validPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)

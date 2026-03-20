@@ -11,7 +11,7 @@ func TestRole(t *testing.T) {
 	var be *backend = b.(*backend)
 	data := map[string]interface{}{
 		"name": testRoleName,
-		"vpn":  testVpn,
+		"vpn":  testVpn(),
 	}
 	input := &framework.FieldData{
 		Raw: data,
@@ -27,8 +27,8 @@ func TestRole(t *testing.T) {
 		t.Log(err)
 		t.Fatal("Correct input failed")
 	}
-	if rl.Vpn != testVpn {
-		t.Fatal("Vpn names differ: sent " + testVpn + ", received" + rl.Vpn)
+	if rl.Vpn != testVpn() {
+		t.Fatal("Vpn names differ: sent " + testVpn() + ", received" + rl.Vpn)
 	}
 
 	input.Raw["name"] = nil

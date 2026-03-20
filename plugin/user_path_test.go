@@ -8,19 +8,24 @@ import (
 
 const testUser = "testuser"
 
-var userPayload = map[string]interface{}{
-	"role": testRoleName,
+// getUserPayload returns a fresh payload for user operations
+func getUserPayload() map[string]interface{} {
+	return map[string]interface{}{
+		"role": testRoleName,
+	}
 }
-var userPath = fmt.Sprintf("user/%s", testUser)
 
 func TestReadUser(t *testing.T) {
 	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
 	err := writeConfig(validPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	createRole(b, cfg)
+	userPath := fmt.Sprintf("user/%s", testUser)
+	userPayload := getUserPayload()
 	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +59,9 @@ func TestReadUser(t *testing.T) {
 
 func TestWithRoleAndConfig(t *testing.T) {
 	b, cfg := getBackend(t)
+	userPayload := getUserPayload()
 	userPayload["role"] = nil
+	userPath := fmt.Sprintf("user/%s", testUser)
 	resp, err := callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)

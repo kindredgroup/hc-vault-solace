@@ -50,12 +50,13 @@ func fetchAndCheckRole(t *testing.T, b logical.Backend, cfg *logical.BackendConf
 }
 
 func createRole(b logical.Backend, cfg *logical.BackendConfig) (*logical.Response, error) {
+	validPayload := getValidPayload()
 	writeConfig(validPayload, b, cfg)
 	pl := map[string]interface{}{
 		"name":            testRoleName,
-		"vpn":             testVpn,
+		"vpn":             testVpn(),
 		"ttl":             credTTL,
-		"acl_profile":     aclProfile,
+		"acl_profile":     aclProfile(),
 		"client_profile":  nil,
 		"config_name":     "default",
 		"username_prefix": testUserPrefix,
@@ -152,8 +153,8 @@ func TestUpdateRole(t *testing.T) {
 	pl := map[string]interface{}{
 		"name":           testRoleName,
 		"ttl":            "0s",
-		"acl_profile":    aclProfile,
-		"client_profile": clientProfile,
+		"acl_profile":    aclProfile(),
+		"client_profile": clientProfile(),
 	}
 	resp, err := b.HandleRequest(context.Background(), &logical.Request{
 		Operation: logical.UpdateOperation,
@@ -189,13 +190,13 @@ func TestUpdateRole(t *testing.T) {
 		t.Fatal("TTLs are different, ttl set = " + pl["ttl"].(string) + ", ttl received = " + role.TTL.String())
 	}
 
-	if role.Vpn != testVpn {
+	if role.Vpn != testVpn() {
 		t.Fatal("Vpn disappeared")
 	}
-	if role.ACLProfile != aclProfile {
+	if role.ACLProfile != aclProfile() {
 		t.Fatalf("ACL profile disappeared, profile read = %s", resp.Data["acl_profile"].(string))
 	}
-	if role.ClientProfile != clientProfile {
+	if role.ClientProfile != clientProfile() {
 		t.Fatal("Client profile disappeared")
 	}
 	if role.GuaranteedEndpointPermissionOverride != guaranteedEndpointPermissionOverride {
