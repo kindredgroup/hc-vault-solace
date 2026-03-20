@@ -86,7 +86,6 @@ func (b *backend) withRoleAndConfig(ctx context.Context, req *logical.Request, d
 }
 
 func (b *backend) readUser(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-
 	return b.withRoleAndConfig(ctx, req, data, func(role *Role, cfg *solaceConfig, username string, logger hclog.Logger) (*logical.Response, error) {
 		client, err := getClient(cfg, logger)
 		if err != nil {
@@ -148,7 +147,6 @@ func (b *backend) deleteUser(ctx context.Context, req *logical.Request, data *fr
 
 // deleteSolaceUser is exposed to creds path as well, so no closure.
 func deleteSolaceUser(role *Role, cfg *solaceConfig, username string, logger hclog.Logger) (*logical.Response, error) {
-
 	logger.Info("deleteSolaceUser: deleting user", "vpn", role.Vpn, "username", username)
 	client, err := getClient(cfg, logger)
 	if err != nil {
