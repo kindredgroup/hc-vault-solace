@@ -132,3 +132,115 @@ func TestWithRoleAndConfigMissingConfig(t *testing.T) {
 		t.Fatalf("Unexpected error message: %s", resp.Error().Error())
 	}
 }
+
+func TestCreateUserSuccess(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	err := writeConfig(validPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	createRole(b, cfg)
+	userPath := fmt.Sprintf("user/%s", "newuser")
+	userPayload := getUserPayload()
+
+	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("No response!")
+	}
+	if resp.IsError() {
+		t.Fatal(resp.Error())
+	}
+
+	// Verify response contains expected fields
+	if resp.Data["username"] != "newuser" {
+		t.Errorf("Expected username 'newuser', got %v", resp.Data["username"])
+	}
+	if resp.Data["vpn"] != testVpn() {
+		t.Errorf("Expected vpn '%s', got %v", testVpn(), resp.Data["vpn"])
+	}
+	if resp.Data["acl_profile"] != aclProfile() {
+		t.Errorf("Expected acl_profile '%s', got %v", aclProfile(), resp.Data["acl_profile"])
+	}
+	if resp.Data["password"] == nil || resp.Data["password"] == "" {
+		t.Error("Expected password to be set")
+	}
+
+	// Cleanup
+	_, err = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestCreateUserDuplicate(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	err := writeConfig(validPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	createRole(b, cfg)
+	userPath := fmt.Sprintf("user/%s", "duplicateuser")
+	userPayload := getUserPayload()
+
+	// Create user first time - should succeed
+	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.IsError() {
+		t.Fatal(resp.Error())
+	}
+
+	// Create same user again - should fail
+	resp, err = callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error when creating duplicate user")
+	}
+
+	// Cleanup
+	_, _ = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
+}
+
+func TestCreateUserInvalidVpn(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	err := writeConfig(validPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a role with invalid VPN
+	rolePayload := map[string]interface{}{
+		"name":        "test-role-invalid-vpn",
+		"vpn":         "nonexistent-vpn",
+		"ttl":         "1s",
+		"acl_profile": aclProfile(),
+		"config_name": "default",
+	}
+	_, err = callBackend("roles/test-role-invalid-vpn", logical.CreateOperation, rolePayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userPayload := map[string]interface{}{
+		"role": "test-role-invalid-vpn",
+	}
+	userPath := fmt.Sprintf("user/%s", "testuser-invalid-vpn")
+	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error when creating user with invalid VPN")
+	}
+}
