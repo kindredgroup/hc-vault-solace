@@ -56,10 +56,9 @@ func getClient(cfg *solaceConfig, logger hclog.Logger) (all.ClientService, error
 	}
 	transport := httptransport.New(host, cfg.SolacePath, getSchemes(cfg))
 	return all.New(transport, strfmt.Default), nil
-
 }
 
-// getPrimary loops throug list of the Solace hosts and returns the active one
+// getPrimary loops through list of the Solace hosts and returns the active one
 func getPrimary(hosts []string, cfg *solaceConfig, logger hclog.Logger) string {
 	logger.Debug("getPrimary", "hosts", hclog.Fmt("%v", hosts))
 	for _, host := range hosts {
