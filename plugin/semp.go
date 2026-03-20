@@ -2,15 +2,21 @@ package solace
 
 import (
 	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/clbanning/mxj/v2"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	hclog "github.com/hashicorp/go-hclog"
-	"io"
 	all "kindredgroup.com/solace-plugin/gen/solaceapi/all"
-	"net/http"
-	"net/url"
-	"strings"
+)
+
+const (
+	sempV1Path         = "/SEMP"
+	msgSpoolXMLRequest = "<rpc><show><message-spool/></show></rpc>"
 )
 
 // getClient returns SEMP v2 client
@@ -55,55 +61,71 @@ func getPrimary(hosts []string, cfg *solaceConfig, logger hclog.Logger) string {
 // credentials and TLS toggle, SolaceHost is ignored. Is logs some errors in info level
 // since errors from non-operational host might be confusing.
 func isActive(host string, cfg *solaceConfig, logger hclog.Logger) bool {
-	var scheme string
 	logger.Debug("Host: " + host)
-	if cfg.DisableTLS {
-		scheme = "http"
-	} else {
-		scheme = "https"
+
+	req, err := newSEMPv1Request(host, cfg, msgSpoolXMLRequest)
+	if err != nil {
+		logger.Info("isActive", "error creating request", err.Error())
+		return false
 	}
+
 	client := &http.Client{}
-	url := &url.URL{
-		Scheme: scheme,
-		Host:   host,
-		Path:   "/SEMP",
-		User:   url.UserPassword(cfg.SolaceUser, cfg.SolacePwd),
-	}
-	// Another way to get the redundancy is '<rpc><show><redundancy/></show></rpc>'
-	// virtual-routers/primary/status/activity returns the redundancy state of the primary
-	// broker. If != 'Local Active' then another one is the primary.
-	bodice := strings.NewReader("<rpc><show><message-spool/></show></rpc>")
-	request := &http.Request{Method: http.MethodPost,
-		URL:  url,
-		Body: io.NopCloser(bodice),
-	}
-	resp, err := client.Do(request)
+	resp, err := client.Do(req)
 	if err != nil {
 		logger.Info("isActive", "error while talking to Solace", err.Error())
 		return false
 	}
+	defer resp.Body.Close()
+
 	if !strings.HasPrefix(resp.Status, "200") {
 		logger.Info("isActive", "Got response code", resp.Status)
 		return false
 	}
+
 	out, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Error("isActive", "error while reading response body", err.Error())
 		return false
 	}
+
 	sp, err := mxj.NewMapXml(out)
 	if err != nil {
 		logger.Error("isActive", "error parsing XML", err.Error())
 		return false
 	}
+
 	configStatus, err := sp.ValuesForKey("config-status")
 	if err != nil {
 		logger.Error(err.Error())
 		return false
 	}
+
 	if (configStatus[0].(string)) == "Enabled (Primary)" {
 		return true
 	}
 	logger.Debug("Message spool status: " + configStatus[0].(string))
 	return false
+}
+
+// newSEMPv1Request creates an HTTP request for SEMP v1 API calls
+func newSEMPv1Request(host string, cfg *solaceConfig, body string) (*http.Request, error) {
+	scheme := "https"
+	if cfg.DisableTLS {
+		scheme = "http"
+	}
+
+	reqURL := &url.URL{
+		Scheme: scheme,
+		Host:   host,
+		Path:   sempV1Path,
+		User:   url.UserPassword(cfg.SolaceUser, cfg.SolacePwd),
+	}
+
+	req := &http.Request{
+		Method: http.MethodPost,
+		URL:    reqURL,
+		Body:   io.NopCloser(strings.NewReader(body)),
+	}
+
+	return req, nil
 }
