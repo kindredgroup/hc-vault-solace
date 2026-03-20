@@ -57,6 +57,113 @@ func TestReadUser(t *testing.T) {
 	}
 }
 
+func TestReadUserNotFound(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	err := writeConfig(validPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	createRole(b, cfg)
+	userPath := fmt.Sprintf("user/%s", "nonexistent-user")
+	userPayload := getUserPayload()
+
+	// Try to read a user that doesn't exist
+	resp, err := callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error when reading non-existent user")
+	}
+}
+
+func TestReadUserSuccess(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	err := writeConfig(validPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	createRole(b, cfg)
+	userPath := fmt.Sprintf("user/%s", "readtest-user")
+	userPayload := getUserPayload()
+
+	// Create user first
+	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.IsError() {
+		t.Fatal(resp.Error())
+	}
+
+	// Read user and verify response fields
+	resp, err = callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.IsError() {
+		t.Fatal(resp.Error())
+	}
+
+	// Verify response contains expected fields
+	if resp.Data["username"] != "readtest-user" {
+		t.Errorf("Expected username 'readtest-user', got %v", resp.Data["username"])
+	}
+	if resp.Data["vpn"] != testVpn() {
+		t.Errorf("Expected vpn '%s', got %v", testVpn(), resp.Data["vpn"])
+	}
+	if resp.Data["acl_profile"] != aclProfile() {
+		t.Errorf("Expected acl_profile '%s', got %v", aclProfile(), resp.Data["acl_profile"])
+	}
+	if resp.Data["enabled"] != true {
+		t.Errorf("Expected enabled to be true, got %v", resp.Data["enabled"])
+	}
+
+	// Cleanup
+	_, err = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestReadUserInvalidVpn(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	err := writeConfig(validPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a role with invalid VPN
+	rolePayload := map[string]interface{}{
+		"name":        "test-role-invalid-vpn-read",
+		"vpn":         "nonexistent-vpn",
+		"ttl":         "1s",
+		"acl_profile": aclProfile(),
+		"config_name": "default",
+	}
+	_, err = callBackend("roles/test-role-invalid-vpn-read", logical.CreateOperation, rolePayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	userPayload := map[string]interface{}{
+		"role": "test-role-invalid-vpn-read",
+	}
+	userPath := fmt.Sprintf("user/%s", "testuser-read-invalid-vpn")
+	resp, err := callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error when reading user with invalid VPN")
+	}
+}
+
 func TestWithRoleAndConfig(t *testing.T) {
 	b, cfg := getBackend(t)
 	userPayload := getUserPayload()
