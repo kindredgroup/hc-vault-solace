@@ -89,7 +89,8 @@ func (b *backend) readUser(ctx context.Context, req *logical.Request, data *fram
 	return b.withRoleAndConfig(ctx, req, data, func(role *Role, cfg *solaceConfig, username string, logger hclog.Logger) (*logical.Response, error) {
 		client, err := getClient(cfg, logger)
 		if err != nil {
-			return logical.ErrorResponse(err.Error()), err
+			logger.Error("readUser", "error", err)
+			return logical.ErrorResponse(err.Error()), nil
 		}
 
 		params := all.NewGetMsgVpnClientUsernameParams()
@@ -100,7 +101,7 @@ func (b *backend) readUser(ctx context.Context, req *logical.Request, data *fram
 		result, err := client.GetMsgVpnClientUsername(params, auth)
 		if err != nil {
 			logger.Error("readUser", "error", err)
-			return logical.ErrorResponse(err.Error()), err
+			return logical.ErrorResponse(err.Error()), nil
 		}
 		logger.Debug("readUser", "result", result.Payload)
 		pl := result.Payload.Data
