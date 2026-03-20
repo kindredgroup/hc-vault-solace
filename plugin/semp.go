@@ -19,12 +19,25 @@ const (
 	msgSpoolXMLRequest = "<rpc><show><message-spool/></show></rpc>"
 )
 
+// getSchemes returns the URL schemes to use based on TLS configuration.
+// Returns ["http"] if TLS is disabled, ["http", "https"] otherwise.
+func getSchemes(cfg *solaceConfig) []string {
+	if cfg.DisableTLS {
+		return []string{"http"}
+	}
+	return []string{"http", "https"}
+}
+
+// getScheme returns a single URL scheme based on TLS configuration.
+func getScheme(cfg *solaceConfig) string {
+	if cfg.DisableTLS {
+		return "http"
+	}
+	return "https"
+}
+
 // getClient returns SEMP v2 client
 func getClient(cfg *solaceConfig, logger hclog.Logger) (all.ClientService, error) {
-	accessSchemes := []string{"http", "https"}
-	if cfg.DisableTLS {
-		accessSchemes = []string{"http"}
-	}
 	hosts := strings.Split(cfg.SolaceHost, ",")
 	logger.Debug("getClient", "hosts", hclog.Fmt("%v", hosts))
 
@@ -38,7 +51,7 @@ func getClient(cfg *solaceConfig, logger hclog.Logger) (all.ClientService, error
 	} else {
 		host = hosts[0]
 	}
-	transport := httptransport.New(host, cfg.SolacePath, accessSchemes)
+	transport := httptransport.New(host, cfg.SolacePath, getSchemes(cfg))
 	return all.New(transport, strfmt.Default), nil
 
 }
@@ -109,13 +122,8 @@ func isActive(host string, cfg *solaceConfig, logger hclog.Logger) bool {
 
 // newSEMPv1Request creates an HTTP request for SEMP v1 API calls
 func newSEMPv1Request(host string, cfg *solaceConfig, body string) (*http.Request, error) {
-	scheme := "https"
-	if cfg.DisableTLS {
-		scheme = "http"
-	}
-
 	reqURL := &url.URL{
-		Scheme: scheme,
+		Scheme: getScheme(cfg),
 		Host:   host,
 		Path:   sempV1Path,
 		User:   url.UserPassword(cfg.SolaceUser, cfg.SolacePwd),

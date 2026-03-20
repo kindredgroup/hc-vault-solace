@@ -77,3 +77,67 @@ func TestIsActive(t *testing.T) {
 		t.Fatal("No host, should have failed")
 	}
 }
+
+func TestGetSchemes(t *testing.T) {
+	tests := []struct {
+		name       string
+		disableTLS bool
+		want       []string
+	}{
+		{
+			name:       "TLS enabled",
+			disableTLS: false,
+			want:       []string{"http", "https"},
+		},
+		{
+			name:       "TLS disabled",
+			disableTLS: true,
+			want:       []string{"http"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &solaceConfig{DisableTLS: tt.disableTLS}
+			got := getSchemes(cfg)
+			if len(got) != len(tt.want) {
+				t.Errorf("getSchemes() = %v, want %v", got, tt.want)
+				return
+			}
+			for i, v := range got {
+				if v != tt.want[i] {
+					t.Errorf("getSchemes()[%d] = %v, want %v", i, v, tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestGetScheme(t *testing.T) {
+	tests := []struct {
+		name       string
+		disableTLS bool
+		want       string
+	}{
+		{
+			name:       "TLS enabled",
+			disableTLS: false,
+			want:       "https",
+		},
+		{
+			name:       "TLS disabled",
+			disableTLS: true,
+			want:       "http",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &solaceConfig{DisableTLS: tt.disableTLS}
+			got := getScheme(cfg)
+			if got != tt.want {
+				t.Errorf("getScheme() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
