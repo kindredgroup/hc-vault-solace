@@ -205,14 +205,14 @@ func (b *backend) createRole(ctx context.Context, req *logical.Request, data *fr
 
 	entry, err := logical.StorageEntryJSON(fmt.Sprintf("%s/%s", roleStoragePrefix, role.Name), role)
 	if err != nil {
-		return logical.ErrorResponse("readRole", "error", err), nil
+		return logical.ErrorResponse("createRole", "error", err), nil
 	}
 
 	b.bLock.Lock()
 	defer b.bLock.Unlock()
 	err = req.Storage.Put(ctx, entry)
 	if err != nil {
-		return logical.ErrorResponse("readRole", "error", err), nil
+		return logical.ErrorResponse("createRole", "error", err), nil
 	}
 
 	return &logical.Response{
