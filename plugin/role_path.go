@@ -102,7 +102,7 @@ func (b *backend) listRoles(ctx context.Context, req *logical.Request, _ *framew
 }
 
 func (b *backend) fetchRole(ctx context.Context, req *logical.Request, name string) (*Role, error) {
-	var dummy Role
+	var role Role
 
 	b.bLock.RLock()
 	se, err := req.Storage.Get(ctx, roleStoragePath(name))
@@ -114,7 +114,7 @@ func (b *backend) fetchRole(ctx context.Context, req *logical.Request, name stri
 	if se == nil {
 		return nil, nil
 	}
-	err = se.DecodeJSON(&dummy)
+	err = se.DecodeJSON(&role)
 	// FIXME! first version of Role had TTL as string. Trying to overcome marshalling issues here.
 	if err != nil {
 		type Role1 struct {
@@ -125,48 +125,48 @@ func (b *backend) fetchRole(ctx context.Context, req *logical.Request, name stri
 			ACLProfile    string
 			ClientProfile string
 		}
-		var dr Role1
-		err = se.DecodeJSON(&dr)
+		var legacyRole Role1
+		err = se.DecodeJSON(&legacyRole)
 		if err != nil {
 			return nil, err
 		}
-		ttl, err := time.ParseDuration(dr.TTL + "s")
+		ttl, err := time.ParseDuration(legacyRole.TTL + "s")
 		if err != nil {
 			return nil, err
 		}
 		return &Role{
-			Name:          dr.Name,
-			Vpn:           dr.Vpn,
+			Name:          legacyRole.Name,
+			Vpn:           legacyRole.Vpn,
 			TTL:           ttl,
-			ConfigName:    dr.ConfigName,
-			ACLProfile:    dr.ACLProfile,
-			ClientProfile: dr.ClientProfile,
+			ConfigName:    legacyRole.ConfigName,
+			ACLProfile:    legacyRole.ACLProfile,
+			ClientProfile: legacyRole.ClientProfile,
 		}, nil
 
 	}
-	return &dummy, err
+	return &role, err
 }
 
 func (b *backend) readRole(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	logger := b.Backend.Logger()
 	logger.Debug("readRole:", "req.Path", req.Path)
 
-	roleRaw, ok := data.GetOk("name")
+	nameRaw, ok := data.GetOk("name")
 	if !ok {
 		return logical.ErrorResponse("role name is required"), nil
 	}
-	role := roleRaw.(string)
-	dummy, err := b.fetchRole(ctx, req, role)
+	name := nameRaw.(string)
+	role, err := b.fetchRole(ctx, req, name)
 	if err != nil {
 		logger.Error("readRole:", "error ", err)
 		return nil, err
 	}
-	if dummy == nil {
-		logger.Debug("readRole", "role not found", role)
+	if role == nil {
+		logger.Debug("readRole", "role not found", name)
 		return nil, nil
 	}
 	return &logical.Response{
-		Data: dummy.ToResponseData(),
+		Data: role.ToResponseData(),
 	}, nil
 
 }
@@ -305,7 +305,7 @@ func (b *backend) deleteRole(ctx context.Context, req *logical.Request, data *fr
 
 	name, ok := data.GetOk("name")
 	if !ok {
-		return logical.ErrorResponse("Role name is required"), nil
+		return logical.ErrorResponse("role name is required"), nil
 	}
 
 	b.bLock.Lock()
