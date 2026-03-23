@@ -83,7 +83,7 @@ func (b *backend) rotateCreds(ctx context.Context, req *logical.Request, data *f
 
 	roleRaw, ok := data.GetOk("role")
 	if !ok {
-		return logical.ErrorResponse("Role name is mandatory"), nil
+		return logical.ErrorResponse("role name is required"), nil
 	}
 
 	role, err := b.fetchRole(ctx, req, roleRaw.(string))
@@ -178,14 +178,14 @@ func (b *backend) revokeCreds(ctx context.Context, req *logical.Request, data *f
 
 	cfg, err := b.fetchConfig(ctx, req, confData(role.ConfigName))
 	if err != nil {
-		logger.Error("rotateCreds", "error", err)
+		logger.Error("revokeCreds", "error", err)
 		return nil, err
 	}
 
-	logger.Info("rotateCreds: revoking user", "username", userRaw.(string), "role", role)
+	logger.Info("revokeCreds: revoking user", "username", userRaw.(string), "role", role)
 	_, err = deleteSolaceUser(role, cfg, userRaw.(string), logger)
 	if err != nil {
-		logger.Error("rotateCreds", "error", err)
+		logger.Error("revokeCreds", "error", err)
 		return nil, err
 	}
 	return nil, err

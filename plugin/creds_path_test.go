@@ -163,8 +163,8 @@ func TestRotateCredsMissingRole(t *testing.T) {
 	if resp == nil || !resp.IsError() {
 		t.Fatal("Expected error response for missing role")
 	}
-	if !strings.Contains(resp.Error().Error(), "Role name is mandatory") {
-		t.Fatalf("Expected 'Role name is mandatory' error, got: %v", resp.Error())
+	if !strings.Contains(resp.Error().Error(), "role name is required") {
+		t.Fatalf("Expected 'role name is required' error, got: %v", resp.Error())
 	}
 }
 
