@@ -306,7 +306,7 @@ func (b *backend) updateRole(ctx context.Context, req *logical.Request, data *fr
 	defer b.bLock.Unlock()
 	err = req.Storage.Put(ctx, entry)
 	if err != nil {
-		logger.Error("updateRole", "Srorage.Put", err)
+		logger.Error("updateRole", "Storage.Put", err)
 		return logical.ErrorResponse("updateRole", "error", err), nil
 	}
 
