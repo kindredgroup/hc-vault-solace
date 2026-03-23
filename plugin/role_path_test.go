@@ -240,13 +240,41 @@ func TestListRolesAfterDelete(t *testing.T) {
 	}
 }
 
-// failingStorage is a storage that always returns an error on List
-type failingStorage struct {
+// errorStorage is a configurable storage that can fail on specific operations
+type errorStorage struct {
 	logical.Storage
+	failGet    bool
+	failPut    bool
+	failDelete bool
+	failList   bool
 }
 
-func (f *failingStorage) List(ctx context.Context, prefix string) ([]string, error) {
-	return nil, fmt.Errorf("simulated storage failure")
+func (e *errorStorage) Get(ctx context.Context, key string) (*logical.StorageEntry, error) {
+	if e.failGet {
+		return nil, fmt.Errorf("simulated Get failure")
+	}
+	return e.Storage.Get(ctx, key)
+}
+
+func (e *errorStorage) Put(ctx context.Context, entry *logical.StorageEntry) error {
+	if e.failPut {
+		return fmt.Errorf("simulated Put failure")
+	}
+	return e.Storage.Put(ctx, entry)
+}
+
+func (e *errorStorage) Delete(ctx context.Context, key string) error {
+	if e.failDelete {
+		return fmt.Errorf("simulated Delete failure")
+	}
+	return e.Storage.Delete(ctx, key)
+}
+
+func (e *errorStorage) List(ctx context.Context, prefix string) ([]string, error) {
+	if e.failList {
+		return nil, fmt.Errorf("simulated List failure")
+	}
+	return e.Storage.List(ctx, prefix)
 }
 
 // TestListRolesStorageError tests listRoles when storage returns an error
@@ -254,12 +282,117 @@ func TestListRolesStorageError(t *testing.T) {
 	b, cfg := getBackend(t)
 	be := b.(*backend)
 
-	// Use failing storage
-	failStore := &failingStorage{Storage: cfg.StorageView}
+	failStore := &errorStorage{Storage: cfg.StorageView, failList: true}
 
 	_, err := be.listRoles(context.Background(), &logical.Request{Storage: failStore}, nil)
 	if err == nil {
 		t.Fatal("Expected error from storage failure, got nil")
+	}
+}
+
+// TestFetchRoleStorageError tests fetchRole when Storage.Get fails
+func TestFetchRoleStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	failStore := &errorStorage{Storage: cfg.StorageView, failGet: true}
+
+	_, err := be.fetchRole(context.Background(), &logical.Request{Storage: failStore}, "any-role")
+	if err == nil {
+		t.Fatal("Expected error from storage Get failure, got nil")
+	}
+}
+
+// TestCreateRoleStorageError tests createRole when Storage.Put fails
+func TestCreateRoleStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	failStore := &errorStorage{Storage: cfg.StorageView, failPut: true}
+
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"name":        "storage-fail-role",
+			"vpn":         testVpn(),
+			"ttl":         credTTL,
+			"config_name": "default",
+		},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.createRole(context.Background(), &logical.Request{Storage: failStore}, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for storage Put failure")
+	}
+}
+
+// TestDeleteRoleStorageError tests deleteRole when Storage.Delete fails
+func TestDeleteRoleStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// First create a role with normal storage
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now try to delete with failing storage
+	failStore := &errorStorage{Storage: cfg.StorageView, failDelete: true}
+
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": testRoleName},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.deleteRole(context.Background(), &logical.Request{Storage: failStore}, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for storage Delete failure")
+	}
+}
+
+// TestUpdateRoleStorageError tests updateRole when Storage.Put fails
+func TestUpdateRoleStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// First create a role with normal storage
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now try to update with storage that fails on Put but not Get
+	failStore := &errorStorage{Storage: cfg.StorageView, failPut: true}
+
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"name":            testRoleName,
+			"username_prefix": "updated-prefix",
+		},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.updateRole(context.Background(), &logical.Request{Storage: failStore}, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for storage Put failure")
 	}
 }
 
