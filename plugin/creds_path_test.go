@@ -137,6 +137,134 @@ func TestPrefixCreds(t *testing.T) {
 	}
 }
 
+func TestRotateCredsMissingRole(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	req := &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "creds/",
+		Storage:   cfg.StorageView,
+	}
+
+	// FieldData without "role" field set
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{},
+		Schema: map[string]*framework.FieldSchema{
+			"role":   {Type: framework.TypeString},
+			"prefix": {Type: framework.TypeString},
+		},
+	}
+
+	resp, err := be.rotateCreds(context.Background(), req, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || !resp.IsError() {
+		t.Fatal("Expected error response for missing role")
+	}
+	if !strings.Contains(resp.Error().Error(), "Role name is mandatory") {
+		t.Fatalf("Expected 'Role name is mandatory' error, got: %v", resp.Error())
+	}
+}
+
+func TestRotateCredsRoleNotFound(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	pl := map[string]interface{}{
+		"role": "nonexistent-role",
+	}
+	resp, err := callBackend("creds/nonexistent-role", logical.ReadOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || !resp.IsError() {
+		t.Fatal("Expected error response for nonexistent role")
+	}
+	if !strings.Contains(resp.Error().Error(), "role not found") {
+		t.Fatalf("Expected 'role not found' error, got: %v", resp.Error())
+	}
+}
+
+func TestRotateCredsFetchRoleError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Use errorStorage to simulate storage failure
+	mockStorage := &errorStorage{
+		Storage: cfg.StorageView,
+		failGet: true,
+	}
+
+	req := &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "creds/testrole",
+		Storage:   mockStorage,
+	}
+
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"role": "testrole",
+		},
+		Schema: map[string]*framework.FieldSchema{
+			"role":   {Type: framework.TypeString},
+			"prefix": {Type: framework.TypeString},
+		},
+	}
+
+	resp, err := be.rotateCreds(context.Background(), req, data)
+	if err == nil {
+		t.Fatal("Expected error from storage failure")
+	}
+	if !strings.Contains(err.Error(), "simulated Get failure") {
+		t.Fatalf("Expected storage error, got: %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("Expected nil response, got: %v", resp)
+	}
+}
+
+func TestRotateCredsFetchConfigError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Create a role first
+	createRole(b, cfg)
+
+	// Use selective error storage that only fails on config lookups
+	selectiveStorage := &selectiveErrorStorage{
+		Storage:       cfg.StorageView,
+		failGetPrefix: confStoragePrefix,
+	}
+
+	req := &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "creds/" + testRoleName,
+		Storage:   selectiveStorage,
+	}
+
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"role": testRoleName,
+		},
+		Schema: map[string]*framework.FieldSchema{
+			"role":   {Type: framework.TypeString},
+			"prefix": {Type: framework.TypeString},
+		},
+	}
+
+	resp, err := be.rotateCreds(context.Background(), req, data)
+	if err == nil {
+		t.Fatal("Expected error from config fetch failure")
+	}
+	if !strings.Contains(err.Error(), "simulated Get failure") {
+		t.Fatalf("Expected storage error, got: %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("Expected nil response, got: %v", resp)
+	}
+}
+
 func revokeCreds(b logical.Backend, cfg *logical.BackendConfig, user string, secret *logical.Secret) (*logical.Response, error) {
 	pl := map[string]interface{}{
 		"username": user,
