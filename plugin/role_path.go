@@ -11,6 +11,11 @@ import (
 
 const roleStoragePrefix = "roles"
 
+// roleStoragePath returns the storage path for a role
+func roleStoragePath(name string) string {
+	return fmt.Sprintf("%s/%s", roleStoragePrefix, name)
+}
+
 func (b *backend) pathRole() *framework.Path {
 	return &framework.Path{
 		Pattern: "roles/" + framework.GenericNameRegex("name"),
@@ -100,7 +105,7 @@ func (b *backend) fetchRole(ctx context.Context, req *logical.Request, name stri
 	var dummy Role
 
 	b.bLock.RLock()
-	se, err := req.Storage.Get(ctx, fmt.Sprintf("%s/%s", roleStoragePrefix, name))
+	se, err := req.Storage.Get(ctx, roleStoragePath(name))
 	b.bLock.RUnlock()
 
 	if err != nil {
@@ -193,7 +198,7 @@ func (b *backend) createRole(ctx context.Context, req *logical.Request, data *fr
 		role.GuaranteedEndpointPermissionOverride = true
 	}
 
-	entry, err := logical.StorageEntryJSON(fmt.Sprintf("%s/%s", roleStoragePrefix, role.Name), role)
+	entry, err := logical.StorageEntryJSON(roleStoragePath(role.Name), role)
 	if err != nil {
 		return logical.ErrorResponse("createRole", "error", err), nil
 	}
@@ -276,7 +281,7 @@ func (b *backend) updateRole(ctx context.Context, req *logical.Request, data *fr
 		role.SubscriptionManager = smRaw.(bool)
 	}
 
-	entry, err := logical.StorageEntryJSON(fmt.Sprintf("%s/%s", roleStoragePrefix, role.Name), role)
+	entry, err := logical.StorageEntryJSON(roleStoragePath(role.Name), role)
 	if err != nil {
 		logger.Error("updateRole", "error from storage", err)
 		return logical.ErrorResponse("updateRole", "error", err), nil
@@ -306,7 +311,7 @@ func (b *backend) deleteRole(ctx context.Context, req *logical.Request, data *fr
 
 	b.bLock.Lock()
 	defer b.bLock.Unlock()
-	err := req.Storage.Delete(ctx, fmt.Sprintf("%s/%s", roleStoragePrefix, name.(string)))
+	err := req.Storage.Delete(ctx, roleStoragePath(name.(string)))
 	if err != nil {
 		logger.Error("deleteRole", "Storage.Delete", err)
 		return logical.ErrorResponse("deleteRole", "error", err), nil
