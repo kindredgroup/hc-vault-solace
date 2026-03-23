@@ -206,3 +206,112 @@ func TestUpdateRole(t *testing.T) {
 		t.Fatalf("Received username_prefix: %s, expected: %s", role.UsernamePrefix, testUserPrefix)
 	}
 }
+
+// TestFetchRoleLegacyFormat tests fetchRole with legacy Role1 format (TTL as string)
+func TestFetchRoleLegacyFormat(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Store a role in the legacy format (TTL as string instead of time.Duration)
+	legacyRole := map[string]interface{}{
+		"Name":          "legacy-role",
+		"Vpn":           testVpn(),
+		"TTL":           "3600", // Legacy format: TTL as string (seconds)
+		"ConfigName":    "default",
+		"ACLProfile":    aclProfile(),
+		"ClientProfile": clientProfile(),
+	}
+
+	entry, err := logical.StorageEntryJSON("roles/legacy-role", legacyRole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = cfg.StorageView.Put(context.Background(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fetch the role - should trigger legacy format parsing
+	role, err := be.fetchRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, "legacy-role")
+	if err != nil {
+		t.Fatalf("fetchRole failed: %v", err)
+	}
+	if role == nil {
+		t.Fatal("fetchRole returned nil role")
+	}
+	if role.Name != "legacy-role" {
+		t.Fatalf("Expected role name 'legacy-role', got '%s'", role.Name)
+	}
+	expectedTTL := time.Duration(3600) * time.Second
+	if role.TTL != expectedTTL {
+		t.Fatalf("Expected TTL %v, got %v", expectedTTL, role.TTL)
+	}
+}
+
+// TestFetchRoleInvalidJSON tests fetchRole with invalid JSON that fails both decoders
+func TestFetchRoleInvalidJSON(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Store invalid JSON directly in storage
+	entry := &logical.StorageEntry{
+		Key:   "roles/invalid-role",
+		Value: []byte("{invalid json"),
+	}
+	err := cfg.StorageView.Put(context.Background(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fetch should fail with decode error
+	_, err = be.fetchRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, "invalid-role")
+	if err == nil {
+		t.Fatal("Expected error for invalid JSON, got nil")
+	}
+}
+
+// TestFetchRoleInvalidTTL tests fetchRole with legacy format but invalid TTL string
+func TestFetchRoleInvalidTTL(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Store a role in legacy format with invalid TTL
+	legacyRole := map[string]interface{}{
+		"Name":          "invalid-ttl-role",
+		"Vpn":           testVpn(),
+		"TTL":           "not-a-number", // Invalid TTL string
+		"ConfigName":    "default",
+		"ACLProfile":    aclProfile(),
+		"ClientProfile": clientProfile(),
+	}
+
+	entry, err := logical.StorageEntryJSON("roles/invalid-ttl-role", legacyRole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = cfg.StorageView.Put(context.Background(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Fetch should fail with parse duration error
+	_, err = be.fetchRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, "invalid-ttl-role")
+	if err == nil {
+		t.Fatal("Expected error for invalid TTL, got nil")
+	}
+}
+
+// TestFetchRoleNotFound tests fetchRole when role doesn't exist
+func TestFetchRoleNotFound(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Fetch non-existent role
+	role, err := be.fetchRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, "non-existent-role")
+	if err != nil {
+		t.Fatalf("fetchRole returned error for non-existent role: %v", err)
+	}
+	if role != nil {
+		t.Fatal("Expected nil role for non-existent role, got non-nil")
+	}
+}
