@@ -43,6 +43,17 @@ func clientProfile() string { return testFixtures.ClientProfile }
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
+	// Check if external Solace is provided via environment variable
+	// Format: SOLACE_TEST_HOST=localhost:8080
+	if externalHost := os.Getenv("SOLACE_TEST_HOST"); externalHost != "" {
+		solaceHost = externalHost
+		testFixtures = DefaultTestFixtures()
+		// For external Solace, assume fixtures already exist
+		fmt.Fprintf(os.Stderr, "Using external Solace at %s\n", externalHost)
+		code := m.Run()
+		os.Exit(code)
+	}
+
 	// Check if Docker is available - if not, we can't run integration tests
 	if SkipIfNoDocker() {
 		fmt.Fprintln(os.Stderr, "Docker/Podman not available, skipping integration tests")

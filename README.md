@@ -226,7 +226,15 @@ go test -v ./plugin/
 
 **First run note:** The initial test run may take a few minutes as it pulls the `solace/solace-pubsub-standard:latest` image (~1.5GB) and waits for the container to fully initialize (up to 2 minutes).
 
+**Using an external Solace instance:**
+If you already have a Solace instance running (e.g., from a previous test run or a shared development environment), you can skip container creation by setting `SOLACE_TEST_HOST`:
+```bash
+SOLACE_TEST_HOST=localhost:8080 go test -v ./plugin/
+```
+This assumes the external Solace instance has the test fixtures already configured (VPN: `testvpn0`, ACL profile: `test_acl_profile`, client profile: `test_client_profile`).
+
 **Environment variables:**
+- `SOLACE_TEST_HOST` - Use an external Solace instance instead of starting a container (e.g., `localhost:8080`)
 - `SKIP_DOCKER_TESTS=1` - Skip tests when Docker is not available (useful in CI without Docker)
 - `DOCKER_HOST` - Docker/Podman socket path (e.g., `unix:///tmp/podman.sock`)
 - `TESTCONTAINERS_RYUK_DISABLED=true` - Disable the reaper container (recommended for Podman)
