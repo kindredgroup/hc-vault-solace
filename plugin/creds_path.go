@@ -13,7 +13,8 @@ import (
 
 const (
 	SecretType = "password"
-	MaxTTL     = time.Duration(11000000000000000)
+	// MaxTTL is approximately 127 days - the maximum lease duration for dynamic credentials
+	MaxTTL = time.Duration(11000000000000000)
 )
 
 func confData(configName string) *framework.FieldData {
