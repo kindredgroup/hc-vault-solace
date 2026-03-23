@@ -2,6 +2,7 @@ package solace
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -74,6 +75,191 @@ func TestListRoles(t *testing.T) {
 	}
 	if fetchAndCheckRole(t, b, cfg, wrongRole) {
 		t.Fatal("Non-existing role found")
+	}
+}
+
+// TestListRolesEmpty tests listing roles when none exist
+func TestListRolesEmpty(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	resp, err := b.HandleRequest(context.Background(), &logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "roles/",
+		Storage:   cfg.StorageView,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("List failed: %v", resp.Error())
+	}
+
+	// Should return empty list or nil keys
+	keys, ok := resp.Data["keys"]
+	if ok && keys != nil {
+		keyList := keys.([]string)
+		if len(keyList) > 0 {
+			t.Fatalf("Expected empty list, got %d roles", len(keyList))
+		}
+	}
+}
+
+// TestListRolesMultiple tests listing multiple roles
+func TestListRolesMultiple(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	// Create multiple roles
+	roleNames := []string{"list-role-a", "list-role-b", "list-role-c"}
+	for _, roleName := range roleNames {
+		pl := map[string]interface{}{
+			"name":        roleName,
+			"vpn":         testVpn(),
+			"ttl":         credTTL,
+			"config_name": "default",
+			"acl_profile": aclProfile(),
+		}
+		resp, err := callBackend("roles/"+roleName, logical.CreateOperation, pl, b, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.IsError() {
+			t.Fatalf("Failed to create role %s: %v", roleName, resp.Error())
+		}
+	}
+
+	// List all roles
+	resp, err := b.HandleRequest(context.Background(), &logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "roles/",
+		Storage:   cfg.StorageView,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("List failed: %v", resp.Error())
+	}
+
+	keys, ok := resp.Data["keys"]
+	if !ok || keys == nil {
+		t.Fatal("Expected keys in response")
+	}
+
+	keyList := keys.([]string)
+	if len(keyList) < len(roleNames) {
+		t.Fatalf("Expected at least %d roles, got %d", len(roleNames), len(keyList))
+	}
+
+	// Verify all created roles are in the list
+	keyMap := make(map[string]bool)
+	for _, k := range keyList {
+		keyMap[k] = true
+	}
+	for _, roleName := range roleNames {
+		if !keyMap[roleName] {
+			t.Fatalf("Role %s not found in list", roleName)
+		}
+	}
+}
+
+// TestListRolesAfterDelete tests that deleted roles don't appear in list
+func TestListRolesAfterDelete(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	// Create a role
+	roleName := "delete-from-list-role"
+	pl := map[string]interface{}{
+		"name":        roleName,
+		"vpn":         testVpn(),
+		"ttl":         credTTL,
+		"config_name": "default",
+		"acl_profile": aclProfile(),
+	}
+	resp, err := callBackend("roles/"+roleName, logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.IsError() {
+		t.Fatalf("Failed to create role: %v", resp.Error())
+	}
+
+	// Verify role is in list
+	resp, err = b.HandleRequest(context.Background(), &logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "roles/",
+		Storage:   cfg.StorageView,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := resp.Data["keys"].([]string)
+	found := false
+	for _, k := range keys {
+		if k == roleName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("Role should be in list before deletion")
+	}
+
+	// Delete the role
+	resp, err = callBackend("roles/"+roleName, logical.DeleteOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify role is no longer in list
+	resp, err = b.HandleRequest(context.Background(), &logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "roles/",
+		Storage:   cfg.StorageView,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.Data["keys"] != nil {
+		keys = resp.Data["keys"].([]string)
+		for _, k := range keys {
+			if k == roleName {
+				t.Fatal("Deleted role should not be in list")
+			}
+		}
+	}
+}
+
+// failingStorage is a storage that always returns an error on List
+type failingStorage struct {
+	logical.Storage
+}
+
+func (f *failingStorage) List(ctx context.Context, prefix string) ([]string, error) {
+	return nil, fmt.Errorf("simulated storage failure")
+}
+
+// TestListRolesStorageError tests listRoles when storage returns an error
+func TestListRolesStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Use failing storage
+	failStore := &failingStorage{Storage: cfg.StorageView}
+
+	_, err := be.listRoles(context.Background(), &logical.Request{Storage: failStore}, nil)
+	if err == nil {
+		t.Fatal("Expected error from storage failure, got nil")
 	}
 }
 
