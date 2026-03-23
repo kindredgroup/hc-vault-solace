@@ -161,17 +161,7 @@ func (b *backend) readRole(ctx context.Context, req *logical.Request, data *fram
 		return nil, nil
 	}
 	return &logical.Response{
-		Data: map[string]interface{}{
-			"name":           dummy.Name,
-			"vpn":            dummy.Vpn,
-			"ttl":            dummy.TTL,
-			"acl_profile":    dummy.ACLProfile,
-			"client_profile": dummy.ClientProfile,
-			"config_name":    dummy.ConfigName,
-			"guaranteed_endpoint_permission_override": dummy.GuaranteedEndpointPermissionOverride,
-			"subscription_manager":                    dummy.SubscriptionManager,
-			"username_prefix":                         dummy.UsernamePrefix,
-		},
+		Data: dummy.ToResponseData(),
 	}, nil
 
 }
@@ -216,17 +206,7 @@ func (b *backend) createRole(ctx context.Context, req *logical.Request, data *fr
 	}
 
 	return &logical.Response{
-		Data: map[string]interface{}{
-			"name":           role.Name,
-			"Vpn":            role.Vpn,
-			"ttl":            time.Duration(role.TTL * time.Second).String(),
-			"acl_profile":    role.ACLProfile,
-			"client_profile": role.ClientProfile,
-			"config_name":    role.ConfigName,
-			"guaranteed_endpoint_permission_override": role.GuaranteedEndpointPermissionOverride,
-			"subscription_manager":                    role.SubscriptionManager,
-			"username_prefix":                         role.UsernamePrefix,
-		},
+		Data: role.ToResponseData(),
 	}, nil
 
 }
@@ -311,17 +291,7 @@ func (b *backend) updateRole(ctx context.Context, req *logical.Request, data *fr
 	}
 
 	return &logical.Response{
-		Data: map[string]interface{}{
-			"name":           role.Name,
-			"Vpn":            role.Vpn,
-			"ttl":            time.Duration(role.TTL * time.Second).String(),
-			"acl_profile":    role.ACLProfile,
-			"client_profile": role.ClientProfile,
-			"config_name":    role.ConfigName,
-			"guaranteed_endpoint_permission_override": role.GuaranteedEndpointPermissionOverride,
-			"subscription_manager":                    role.SubscriptionManager,
-			"username_prefix":                         role.UsernamePrefix,
-		},
+		Data: role.ToResponseData(),
 	}, nil
 }
 

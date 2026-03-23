@@ -23,6 +23,21 @@ func (r *Role) String() string {
 	return fmt.Sprintf("name=%s, vpn=%s, ttl=%s, acl=%s, client_profile=%s, config_name=%s, guaranteed_endpoint_permission_override=%t, subscription_manager=%t, username_prefix=%s", r.Name, r.Vpn, r.TTL.String(), r.ACLProfile, r.ClientProfile, r.ConfigName, r.GuaranteedEndpointPermissionOverride, r.SubscriptionManager, r.UsernamePrefix)
 }
 
+// ToResponseData converts a Role to a map suitable for logical.Response.Data
+func (r *Role) ToResponseData() map[string]interface{} {
+	return map[string]interface{}{
+		"name":           r.Name,
+		"vpn":            r.Vpn,
+		"ttl":            r.TTL,
+		"acl_profile":    r.ACLProfile,
+		"client_profile": r.ClientProfile,
+		"config_name":    r.ConfigName,
+		"guaranteed_endpoint_permission_override": r.GuaranteedEndpointPermissionOverride,
+		"subscription_manager":                    r.SubscriptionManager,
+		"username_prefix":                         r.UsernamePrefix,
+	}
+}
+
 func data2role(data *framework.FieldData) (*Role, error) {
 	role := &Role{}
 
