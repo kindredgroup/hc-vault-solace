@@ -244,6 +244,161 @@ func TestReadRole(t *testing.T) {
 	}
 }
 
+// TestReadRoleExisting tests reading an existing role
+func TestReadRoleExisting(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	// Create a role first
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the role
+	resp, err := callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Read failed: %v", resp.Error())
+	}
+
+	// Verify response contains expected fields
+	if resp.Data["name"] != testRoleName {
+		t.Fatalf("Expected name '%s', got '%s'", testRoleName, resp.Data["name"])
+	}
+	if resp.Data["vpn"] != testVpn() {
+		t.Fatalf("Expected vpn '%s', got '%s'", testVpn(), resp.Data["vpn"])
+	}
+	if resp.Data["config_name"] != "default" {
+		t.Fatalf("Expected config_name 'default', got '%s'", resp.Data["config_name"])
+	}
+	if resp.Data["acl_profile"] != aclProfile() {
+		t.Fatalf("Expected acl_profile '%s', got '%s'", aclProfile(), resp.Data["acl_profile"])
+	}
+	if resp.Data["username_prefix"] != testUserPrefix {
+		t.Fatalf("Expected username_prefix '%s', got '%s'", testUserPrefix, resp.Data["username_prefix"])
+	}
+
+	// Verify boolean fields
+	if _, ok := resp.Data["guaranteed_endpoint_permission_override"].(bool); !ok {
+		t.Fatal("guaranteed_endpoint_permission_override should be a bool")
+	}
+	if _, ok := resp.Data["subscription_manager"].(bool); !ok {
+		t.Fatal("subscription_manager should be a bool")
+	}
+}
+
+// TestReadRoleMissingName tests readRole with missing name (direct call)
+func TestReadRoleMissingName(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Call readRole directly with empty FieldData (no name)
+	emptyData := &framework.FieldData{
+		Raw:    map[string]interface{}{},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.readRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, emptyData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing name")
+	}
+}
+
+// TestReadRoleWithFetchError tests readRole when fetchRole returns an error
+func TestReadRoleWithFetchError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Store invalid JSON to trigger fetchRole error
+	entry := &logical.StorageEntry{
+		Key:   "roles/corrupted-role",
+		Value: []byte("{invalid json"),
+	}
+	err := cfg.StorageView.Put(context.Background(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to read the corrupted role
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": "corrupted-role"},
+		Schema: be.pathRole().Fields,
+	}
+	_, err = be.readRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err == nil {
+		t.Fatal("Expected error for corrupted role data, got nil")
+	}
+}
+
+// TestReadRoleAllFields tests that all role fields are returned correctly
+func TestReadRoleAllFields(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	// Create a role with all fields set
+	pl := map[string]interface{}{
+		"name":            "full-role",
+		"vpn":             testVpn(),
+		"ttl":             3600,
+		"config_name":     "default",
+		"acl_profile":     aclProfile(),
+		"client_profile":  clientProfile(),
+		"username_prefix": "fulltest",
+		"guaranteed_endpoint_permission_override": false,
+		"subscription_manager":                    true,
+	}
+	resp, err := callBackend("roles/full-role", logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.IsError() {
+		t.Fatalf("Create failed: %v", resp.Error())
+	}
+
+	// Read and verify all fields
+	resp, err = callBackend("roles/full-role", logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+
+	// Check all fields
+	expectedFields := []string{
+		"name", "vpn", "ttl", "config_name", "acl_profile",
+		"client_profile", "username_prefix",
+		"guaranteed_endpoint_permission_override", "subscription_manager",
+	}
+	for _, field := range expectedFields {
+		if _, ok := resp.Data[field]; !ok {
+			t.Fatalf("Missing field '%s' in response", field)
+		}
+	}
+
+	// Verify specific values
+	if resp.Data["client_profile"].(string) != clientProfile() {
+		t.Fatalf("Expected client_profile '%s', got '%s'", clientProfile(), resp.Data["client_profile"])
+	}
+	if resp.Data["subscription_manager"].(bool) != true {
+		t.Fatal("Expected subscription_manager to be true")
+	}
+	if resp.Data["guaranteed_endpoint_permission_override"].(bool) != false {
+		t.Fatal("Expected GEPO to be false")
+	}
+}
+
 // Deleting non-existing key succeeds somehow
 func TestDeleteRole(t *testing.T) {
 	b, cfg := getBackend(t)
