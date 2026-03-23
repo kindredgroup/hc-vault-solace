@@ -216,7 +216,6 @@ func (b *backend) createRole(ctx context.Context, req *logical.Request, data *fr
 
 }
 
-// FIXME: needs locking
 func (b *backend) updateRole(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	logger := b.Backend.Logger()
 	logger.Debug("updateRole:", "path", req.Path, "req.Data", req.Data)
