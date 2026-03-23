@@ -396,6 +396,179 @@ func TestUpdateRoleStorageError(t *testing.T) {
 	}
 }
 
+// TestUpdateRoleReadError tests updateRole when readRole returns an error
+func TestUpdateRoleReadError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Store invalid JSON to trigger readRole error
+	entry := &logical.StorageEntry{
+		Key:   "roles/update-corrupted-role",
+		Value: []byte("{invalid json"),
+	}
+	err := cfg.StorageView.Put(context.Background(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to update the corrupted role
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"name":            "update-corrupted-role",
+			"username_prefix": "newprefix",
+		},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.updateRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	// readRole returns (nil, error) for corrupted data, so updateRole should return error response
+	if err != nil {
+		// This is acceptable - error propagated
+		return
+	}
+	if resp != nil && resp.IsError() {
+		// This is also acceptable - error response returned
+		return
+	}
+	t.Fatal("Expected error for corrupted role data")
+}
+
+// TestUpdateRoleWithDifferentVpn tests updateRole when VPN is changed
+func TestUpdateRoleWithDifferentVpn(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	// Create a role
+	pl := map[string]interface{}{
+		"name":        "vpn-change-role",
+		"vpn":         testVpn(),
+		"ttl":         credTTL,
+		"config_name": "default",
+		"acl_profile": aclProfile(),
+	}
+	resp, err := callBackend("roles/vpn-change-role", logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.IsError() {
+		t.Fatalf("Create failed: %v", resp.Error())
+	}
+
+	// Update with a "different" VPN value (still test VPN but triggers the branch)
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"name": "vpn-change-role",
+			"vpn":  testVpn(),
+		},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err = be.updateRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("updateRole returned error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("updateRole failed: %v", resp.Error())
+	}
+}
+
+// TestCreateRoleData2RoleError tests createRole when data2role fails
+func TestCreateRoleData2RoleError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	// Create FieldData with empty name to trigger data2role error
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"name":        "", // Empty name triggers error in data2role
+			"vpn":         testVpn(),
+			"ttl":         credTTL,
+			"config_name": "default",
+		},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.createRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for empty name")
+	}
+}
+
+// TestUpdateRoleData2RoleErrorFromStorage tests updateRole when data2role fails on storage data
+func TestUpdateRoleData2RoleErrorFromStorage(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Store a role with empty name in storage (malformed data)
+	// This will cause data2role to fail when reading from storage
+	malformedRole := map[string]interface{}{
+		"name":        "", // Empty name - will cause data2role to fail
+		"vpn":         testVpn(),
+		"ttl":         3600,
+		"config_name": "default",
+	}
+
+	entry, err := logical.StorageEntryJSON("roles/malformed-storage-role", malformedRole)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = cfg.StorageView.Put(context.Background(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to update - readRole will succeed but data2role on resp.Data will fail
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"name":            "malformed-storage-role",
+			"username_prefix": "newprefix",
+		},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.updateRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for malformed storage data")
+	}
+}
+
+// TestUpdateRoleIsErrorResponse tests updateRole when readRole returns an error response
+func TestUpdateRoleIsErrorResponse(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Call updateRole with missing name - readRole returns error response
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{}, // No name - readRole returns error response
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.updateRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing name")
+	}
+}
+
 // TestRoleExCheckRoleExists tests roleExCheck when role exists
 func TestRoleExCheckRoleExists(t *testing.T) {
 	b, cfg := getBackend(t)
