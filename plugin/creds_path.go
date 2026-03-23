@@ -22,7 +22,7 @@ func confData(configName string) *framework.FieldData {
 			"config_name": configName,
 		},
 		Schema: map[string]*framework.FieldSchema{
-			"config_name": &framework.FieldSchema{
+			"config_name": {
 				Type: framework.TypeString,
 			},
 		},
