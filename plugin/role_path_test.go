@@ -263,6 +263,99 @@ func TestListRolesStorageError(t *testing.T) {
 	}
 }
 
+// TestRoleExCheckRoleExists tests roleExCheck when role exists
+func TestRoleExCheckRoleExists(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Create a role first
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check if role exists
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": testRoleName},
+		Schema: be.pathRole().Fields,
+	}
+	exists, err := be.roleExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("roleExCheck returned error: %v", err)
+	}
+	if !exists {
+		t.Fatal("Expected role to exist, got false")
+	}
+}
+
+// TestRoleExCheckRoleNotExists tests roleExCheck when role doesn't exist
+func TestRoleExCheckRoleNotExists(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Check for non-existent role
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": "non-existent-role"},
+		Schema: be.pathRole().Fields,
+	}
+	exists, err := be.roleExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("roleExCheck returned error: %v", err)
+	}
+	if exists {
+		t.Fatal("Expected role to not exist, got true")
+	}
+}
+
+// TestRoleExCheckReadError tests roleExCheck when readRole returns an error
+func TestRoleExCheckReadError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Store invalid JSON to trigger readRole error
+	entry := &logical.StorageEntry{
+		Key:   "roles/corrupted-excheck-role",
+		Value: []byte("{invalid json"),
+	}
+	err := cfg.StorageView.Put(context.Background(), entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check for corrupted role
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": "corrupted-excheck-role"},
+		Schema: be.pathRole().Fields,
+	}
+	exists, err := be.roleExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err == nil {
+		t.Fatal("Expected error from corrupted role, got nil")
+	}
+	if exists {
+		t.Fatal("Expected exists to be false on error")
+	}
+}
+
+// TestRoleExCheckMissingName tests roleExCheck when name is missing
+func TestRoleExCheckMissingName(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Call with empty data (no name)
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{},
+		Schema: be.pathRole().Fields,
+	}
+	exists, err := be.roleExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	// readRole returns error response for missing name, which becomes an error from roleExCheck
+	if err == nil {
+		t.Fatal("Expected error for missing name")
+	}
+	if exists {
+		t.Fatal("Expected exists to be false on error")
+	}
+}
+
 func TestCreateRole(t *testing.T) {
 	b, cfg := getBackend(t)
 	resp, err := createRole(b, cfg)
