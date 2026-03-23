@@ -159,12 +159,12 @@ func (b *backend) revokeCreds(ctx context.Context, req *logical.Request, data *f
 	// FIXME: check if username is in the secret passed with the call.
 	userRaw, ok := data.GetOk("username")
 	if !ok {
-		return logical.ErrorResponse("Username is mandatory"), nil
+		return logical.ErrorResponse("username is required"), nil
 	}
 
 	roleRaw, ok := data.GetOk("role")
 	if !ok {
-		return logical.ErrorResponse("Role is mandatory"), nil
+		return logical.ErrorResponse("role is required"), nil
 	}
 	role, err := b.fetchRole(ctx, req, roleRaw.(string))
 	if err != nil {

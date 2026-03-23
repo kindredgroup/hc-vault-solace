@@ -293,8 +293,8 @@ func TestRevokeCredsMissingUsername(t *testing.T) {
 	if resp == nil || !resp.IsError() {
 		t.Fatal("Expected error response for missing username")
 	}
-	if !strings.Contains(resp.Error().Error(), "Username is mandatory") {
-		t.Fatalf("Expected 'Username is mandatory' error, got: %v", resp.Error())
+	if !strings.Contains(resp.Error().Error(), "username is required") {
+		t.Fatalf("Expected 'username is required' error, got: %v", resp.Error())
 	}
 }
 
@@ -316,8 +316,8 @@ func TestRevokeCredsMissingRole(t *testing.T) {
 	if resp == nil || !resp.IsError() {
 		t.Fatal("Expected error response for missing role")
 	}
-	if !strings.Contains(resp.Error().Error(), "Role is mandatory") {
-		t.Fatalf("Expected 'Role is mandatory' error, got: %v", resp.Error())
+	if !strings.Contains(resp.Error().Error(), "role is required") {
+		t.Fatalf("Expected 'role is required' error, got: %v", resp.Error())
 	}
 }
 
