@@ -3,8 +3,9 @@ package solace
 import (
 	"errors"
 	"fmt"
-	"github.com/hashicorp/vault/sdk/framework"
 	"time"
+
+	"github.com/hashicorp/vault/sdk/framework"
 )
 
 type Role struct {
@@ -20,7 +21,12 @@ type Role struct {
 }
 
 func (r *Role) String() string {
-	return fmt.Sprintf("name=%s, vpn=%s, ttl=%s, acl=%s, client_profile=%s, config_name=%s, guaranteed_endpoint_permission_override=%t, subscription_manager=%t, username_prefix=%s", r.Name, r.Vpn, r.TTL.String(), r.ACLProfile, r.ClientProfile, r.ConfigName, r.GuaranteedEndpointPermissionOverride, r.SubscriptionManager, r.UsernamePrefix)
+	return fmt.Sprintf(
+		"name=%s, vpn=%s, ttl=%s, acl=%s, client_profile=%s, config_name=%s, "+
+			"guaranteed_endpoint_permission_override=%t, subscription_manager=%t, username_prefix=%s",
+		r.Name, r.Vpn, r.TTL.String(), r.ACLProfile, r.ClientProfile, r.ConfigName,
+		r.GuaranteedEndpointPermissionOverride, r.SubscriptionManager, r.UsernamePrefix,
+	)
 }
 
 // ToResponseData converts a Role to a map suitable for logical.Response.Data
@@ -43,11 +49,11 @@ func data2role(data *framework.FieldData) (*Role, error) {
 
 	nameRaw, ok := data.GetOk("name")
 	if !ok {
-		return nil, errors.New("Role name is mandatory")
+		return nil, errors.New("role name is required")
 	}
 	role.Name = nameRaw.(string)
 	if len(role.Name) == 0 {
-		return nil, errors.New("Role name is mandatory")
+		return nil, errors.New("role name is required")
 	}
 
 	vpnRaw, ok := data.GetOk("vpn")
