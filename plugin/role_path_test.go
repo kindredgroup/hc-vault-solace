@@ -320,6 +320,240 @@ func TestUpdateRole(t *testing.T) {
 	}
 }
 
+// TestUpdateRoleNonExistent tests updateRole when role doesn't exist (should create it)
+func TestUpdateRoleNonExistent(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	pl := map[string]interface{}{
+		"name":            "new-role-via-update",
+		"vpn":             testVpn(),
+		"ttl":             credTTL,
+		"config_name":     "default",
+		"acl_profile":     aclProfile(),
+		"username_prefix": "updatetest",
+	}
+	resp, err := callBackend("roles/new-role-via-update", logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update (create) failed: %v", resp.Error())
+	}
+
+	// Verify role was created
+	resp, err = callBackend("roles/new-role-via-update", logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Role was not created via update")
+	}
+}
+
+// TestUpdateRoleVpn tests updating the VPN field
+func TestUpdateRoleVpn(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update only VPN (using same VPN since we can't create another in test)
+	pl := map[string]interface{}{
+		"name": testRoleName,
+		"vpn":  testVpn(), // Same VPN, but tests the branch
+	}
+	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update VPN failed: %v", resp.Error())
+	}
+}
+
+// TestUpdateRoleConfigName tests updating the config_name field
+func TestUpdateRoleConfigName(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pl := map[string]interface{}{
+		"name":        testRoleName,
+		"config_name": "default", // Same config, but tests the branch
+	}
+	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update config_name failed: %v", resp.Error())
+	}
+}
+
+// TestUpdateRoleUsernamePrefix tests updating the username_prefix field
+func TestUpdateRoleUsernamePrefix(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newPrefix := "newprefix"
+	pl := map[string]interface{}{
+		"name":            testRoleName,
+		"username_prefix": newPrefix,
+	}
+	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update username_prefix failed: %v", resp.Error())
+	}
+
+	// Verify the update
+	resp, err = callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data["username_prefix"].(string) != newPrefix {
+		t.Fatalf("Expected username_prefix '%s', got '%s'", newPrefix, resp.Data["username_prefix"].(string))
+	}
+}
+
+// TestUpdateRoleGEPO tests updating guaranteed_endpoint_permission_override
+func TestUpdateRoleGEPO(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update GEPO to false
+	pl := map[string]interface{}{
+		"name": testRoleName,
+		"guaranteed_endpoint_permission_override": false,
+	}
+	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update GEPO failed: %v", resp.Error())
+	}
+
+	// Verify the update
+	resp, err = callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data["guaranteed_endpoint_permission_override"].(bool) != false {
+		t.Fatal("Expected GEPO to be false after update")
+	}
+}
+
+// TestUpdateRoleSubscriptionManager tests updating subscription_manager
+func TestUpdateRoleSubscriptionManager(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update subscription_manager to true
+	pl := map[string]interface{}{
+		"name":                 testRoleName,
+		"subscription_manager": true,
+	}
+	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update subscription_manager failed: %v", resp.Error())
+	}
+
+	// Verify the update
+	resp, err = callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data["subscription_manager"].(bool) != true {
+		t.Fatal("Expected subscription_manager to be true after update")
+	}
+}
+
+// TestUpdateRoleMultipleFields tests updating multiple fields at once
+func TestUpdateRoleMultipleFields(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newPrefix := "multiupdate"
+	pl := map[string]interface{}{
+		"name":                 testRoleName,
+		"ttl":                  100,
+		"acl_profile":          aclProfile(),
+		"client_profile":       clientProfile(),
+		"username_prefix":      newPrefix,
+		"subscription_manager": true,
+		"guaranteed_endpoint_permission_override": false,
+	}
+	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update multiple fields failed: %v", resp.Error())
+	}
+
+	// Verify all updates
+	resp, err = callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Data["username_prefix"].(string) != newPrefix {
+		t.Fatalf("Expected username_prefix '%s', got '%s'", newPrefix, resp.Data["username_prefix"].(string))
+	}
+	if resp.Data["subscription_manager"].(bool) != true {
+		t.Fatal("Expected subscription_manager to be true")
+	}
+	if resp.Data["guaranteed_endpoint_permission_override"].(bool) != false {
+		t.Fatal("Expected GEPO to be false")
+	}
+	if resp.Data["client_profile"].(string) != clientProfile() {
+		t.Fatalf("Expected client_profile '%s', got '%s'", clientProfile(), resp.Data["client_profile"].(string))
+	}
+}
+
 // TestFetchRoleLegacyFormat tests fetchRole with legacy Role1 format (TTL as string)
 func TestFetchRoleLegacyFormat(t *testing.T) {
 	b, cfg := getBackend(t)
