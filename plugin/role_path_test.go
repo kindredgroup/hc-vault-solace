@@ -2,9 +2,11 @@ package solace
 
 import (
 	"context"
-	logical "github.com/hashicorp/vault/sdk/logical"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/vault/sdk/framework"
+	logical "github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
@@ -254,6 +256,166 @@ func TestDeleteRole(t *testing.T) {
 	}
 	if resp.IsError() {
 		t.Fatal("Deleting non-existing role failed")
+	}
+}
+
+// TestDeleteRoleExisting tests deleting an existing role
+func TestDeleteRoleExisting(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	// Create a role first
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify role exists
+	resp, err := callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Role was not created")
+	}
+
+	// Delete the role
+	resp, err = callBackend(testRolePath, logical.DeleteOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp != nil && resp.IsError() {
+		t.Fatalf("Delete failed: %v", resp.Error())
+	}
+
+	// Verify role no longer exists
+	resp, err = callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp != nil {
+		t.Fatal("Role still exists after deletion")
+	}
+}
+
+// TestDeleteRoleAndRecreate tests deleting and recreating a role
+func TestDeleteRoleAndRecreate(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	// Create a role
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the role
+	resp, err := callBackend(testRolePath, logical.DeleteOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp != nil && resp.IsError() {
+		t.Fatalf("Delete failed: %v", resp.Error())
+	}
+
+	// Recreate the role with different settings
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+	pl := map[string]interface{}{
+		"name":            testRoleName,
+		"vpn":             testVpn(),
+		"ttl":             100, // Different TTL
+		"config_name":     "default",
+		"acl_profile":     aclProfile(),
+		"username_prefix": "recreated",
+	}
+	resp, err = callBackend(testRolePath, logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Recreate failed: %v", resp.Error())
+	}
+
+	// Verify recreated role has new settings
+	resp, err = callBackend(testRolePath, logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Role was not recreated")
+	}
+	if resp.Data["username_prefix"].(string) != "recreated" {
+		t.Fatalf("Expected username_prefix 'recreated', got '%s'", resp.Data["username_prefix"].(string))
+	}
+}
+
+// TestDeleteRoleMultiple tests deleting multiple roles
+func TestDeleteRoleMultiple(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	// Create multiple roles
+	roles := []string{"delete-test-role1", "delete-test-role2", "delete-test-role3"}
+	for _, roleName := range roles {
+		pl := map[string]interface{}{
+			"name":        roleName,
+			"vpn":         testVpn(),
+			"ttl":         credTTL,
+			"config_name": "default",
+			"acl_profile": aclProfile(),
+		}
+		resp, err := callBackend("roles/"+roleName, logical.CreateOperation, pl, b, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.IsError() {
+			t.Fatalf("Failed to create role %s: %v", roleName, resp.Error())
+		}
+	}
+
+	// Delete each role and verify
+	for _, roleName := range roles {
+		resp, err := callBackend("roles/"+roleName, logical.DeleteOperation, b, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp != nil && resp.IsError() {
+			t.Fatalf("Delete failed for %s: %v", roleName, resp.Error())
+		}
+
+		// Verify deletion
+		resp, err = callBackend("roles/"+roleName, logical.ReadOperation, b, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp != nil {
+			t.Fatalf("Role %s still exists after deletion", roleName)
+		}
+	}
+}
+
+// TestDeleteRoleMissingName tests deleteRole with missing name (direct call)
+func TestDeleteRoleMissingName(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Call deleteRole directly with empty FieldData (no name)
+	emptyData := &framework.FieldData{
+		Raw:    map[string]interface{}{},
+		Schema: be.pathRole().Fields,
+	}
+	resp, err := be.deleteRole(context.Background(), &logical.Request{Storage: cfg.StorageView}, emptyData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing name")
 	}
 }
 
