@@ -1,10 +1,13 @@
 package solace
 
 import (
+	"context"
 	"fmt"
-	logical "github.com/hashicorp/vault/sdk/logical"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/vault/sdk/framework"
+	logical "github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
@@ -141,4 +144,179 @@ func revokeCreds(b logical.Backend, cfg *logical.BackendConfig, user string, sec
 	}
 	return callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
 
+}
+
+func TestRevokeCredsMissingUsername(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	pl := map[string]interface{}{
+		"role": testRoleName,
+	}
+	// Revoke requires a secret with the correct type
+	secret := &logical.Secret{
+		InternalData: map[string]interface{}{
+			"secret_type": SecretType,
+		},
+	}
+	resp, err := callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || !resp.IsError() {
+		t.Fatal("Expected error response for missing username")
+	}
+	if !strings.Contains(resp.Error().Error(), "Username is mandatory") {
+		t.Fatalf("Expected 'Username is mandatory' error, got: %v", resp.Error())
+	}
+}
+
+func TestRevokeCredsMissingRole(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	pl := map[string]interface{}{
+		"username": "testuser",
+	}
+	secret := &logical.Secret{
+		InternalData: map[string]interface{}{
+			"secret_type": SecretType,
+		},
+	}
+	resp, err := callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || !resp.IsError() {
+		t.Fatal("Expected error response for missing role")
+	}
+	if !strings.Contains(resp.Error().Error(), "Role is mandatory") {
+		t.Fatalf("Expected 'Role is mandatory' error, got: %v", resp.Error())
+	}
+}
+
+func TestRevokeCredsRoleNotFound(t *testing.T) {
+	b, cfg := getBackend(t)
+
+	pl := map[string]interface{}{
+		"username": "testuser",
+		"role":     "nonexistent-role",
+	}
+	secret := &logical.Secret{
+		InternalData: map[string]interface{}{
+			"secret_type": SecretType,
+		},
+	}
+	resp, err := callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil || !resp.IsError() {
+		t.Fatal("Expected error response for nonexistent role")
+	}
+	if !strings.Contains(resp.Error().Error(), "role not found") {
+		t.Fatalf("Expected 'role not found' error, got: %v", resp.Error())
+	}
+}
+
+func TestRevokeCredsFetchRoleError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Use errorStorage to simulate storage failure
+	mockStorage := &errorStorage{
+		Storage: cfg.StorageView,
+		failGet: true,
+	}
+
+	req := &logical.Request{
+		Operation: logical.RevokeOperation,
+		Path:      "creds/",
+		Storage:   mockStorage,
+		Secret: &logical.Secret{
+			InternalData: map[string]interface{}{
+				"secret_type": SecretType,
+			},
+		},
+	}
+
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"username": "testuser",
+			"role":     "testrole",
+		},
+		Schema: map[string]*framework.FieldSchema{
+			"username": {Type: framework.TypeString},
+			"role":     {Type: framework.TypeString},
+		},
+	}
+
+	resp, err := be.revokeCreds(context.Background(), req, data)
+	if err == nil {
+		t.Fatal("Expected error from storage failure")
+	}
+	if !strings.Contains(err.Error(), "simulated Get failure") {
+		t.Fatalf("Expected storage error, got: %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("Expected nil response, got: %v", resp)
+	}
+}
+
+func TestRevokeCredsFetchConfigError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	// Create a role that references a config
+	createRole(b, cfg)
+
+	// Create a selective error storage that only fails on config lookups
+	selectiveStorage := &selectiveErrorStorage{
+		Storage:       cfg.StorageView,
+		failGetPrefix: confStoragePrefix,
+	}
+
+	req := &logical.Request{
+		Operation: logical.RevokeOperation,
+		Path:      "creds/",
+		Storage:   selectiveStorage,
+		Secret: &logical.Secret{
+			InternalData: map[string]interface{}{
+				"secret_type": SecretType,
+			},
+		},
+	}
+
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"username": "testuser",
+			"role":     testRoleName,
+		},
+		Schema: map[string]*framework.FieldSchema{
+			"username": {Type: framework.TypeString},
+			"role":     {Type: framework.TypeString},
+		},
+	}
+
+	resp, err := be.revokeCreds(context.Background(), req, data)
+	if err == nil {
+		t.Fatal("Expected error from config fetch failure")
+	}
+	if !strings.Contains(err.Error(), "simulated Get failure") {
+		t.Fatalf("Expected storage error, got: %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("Expected nil response, got: %v", resp)
+	}
+}
+
+// selectiveErrorStorage fails Get only for keys with a specific prefix
+type selectiveErrorStorage struct {
+	logical.Storage
+	failGetPrefix string
+}
+
+func (s *selectiveErrorStorage) Get(ctx context.Context, key string) (*logical.StorageEntry, error) {
+	if strings.HasPrefix(key, s.failGetPrefix) {
+		return nil, fmt.Errorf("simulated Get failure")
+	}
+	return s.Storage.Get(ctx, key)
 }
