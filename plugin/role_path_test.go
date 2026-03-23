@@ -118,6 +118,119 @@ func TestCreateRole(t *testing.T) {
 	}
 }
 
+// TestCreateRoleMissingVpn tests createRole with missing VPN
+func TestCreateRoleMissingVpn(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	pl := map[string]interface{}{
+		"name":        "test-role-no-vpn",
+		"ttl":         credTTL,
+		"config_name": "default",
+		// "vpn" is missing
+	}
+	resp, err := callBackend("roles/test-role-no-vpn", logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing vpn")
+	}
+}
+
+// TestCreateRoleMissingTTL tests createRole with missing TTL
+func TestCreateRoleMissingTTL(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	pl := map[string]interface{}{
+		"name":        "test-role-no-ttl",
+		"vpn":         testVpn(),
+		"config_name": "default",
+		// "ttl" is missing (will be 0)
+	}
+	resp, err := callBackend("roles/test-role-no-ttl", logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing ttl")
+	}
+}
+
+// TestCreateRoleMissingConfigName tests createRole with missing config_name
+func TestCreateRoleMissingConfigName(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	pl := map[string]interface{}{
+		"name": "test-role-no-config",
+		"vpn":  testVpn(),
+		"ttl":  credTTL,
+		// "config_name" is missing
+	}
+	resp, err := callBackend("roles/test-role-no-config", logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected error response, got nil")
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing config_name")
+	}
+}
+
+// TestCreateRoleWithExplicitGEPO tests createRole with explicit guaranteed_endpoint_permission_override
+func TestCreateRoleWithExplicitGEPO(t *testing.T) {
+	b, cfg := getBackend(t)
+	validPayload := getValidPayload()
+	writeConfig(validPayload, b, cfg)
+
+	pl := map[string]interface{}{
+		"name":        "test-role-gepo",
+		"vpn":         testVpn(),
+		"ttl":         credTTL,
+		"config_name": "default",
+		"guaranteed_endpoint_permission_override": false, // Explicitly set to false
+	}
+	resp, err := callBackend("roles/test-role-gepo", logical.CreateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatal(resp.Error())
+	}
+
+	// Read the role back and verify GEPO is false
+	resp, err = callBackend("roles/test-role-gepo", logical.ReadOperation, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	gepo, ok := resp.Data["guaranteed_endpoint_permission_override"].(bool)
+	if !ok {
+		t.Fatal("guaranteed_endpoint_permission_override not found in response")
+	}
+	if gepo != false {
+		t.Fatalf("Expected GEPO to be false, got %v", gepo)
+	}
+}
+
 func TestReadRole(t *testing.T) {
 	b, cfg := getBackend(t)
 	resp, err := callBackend(wrongRolePath, logical.ReadOperation, b, cfg)
