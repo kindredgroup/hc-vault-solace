@@ -1,6 +1,6 @@
 module kindredgroup.com/solace-plugin
 
-go 1.25.7
+go 1.25.8
 
 require (
 	github.com/clbanning/mxj/v2 v2.7.0
