@@ -1,9 +1,11 @@
 package solace
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/vault/sdk/framework"
 	logical "github.com/hashicorp/vault/sdk/logical"
 )
 
@@ -171,6 +173,70 @@ func TestUpdateConfig(t *testing.T) {
 		t.Fatal("Got user = " + resp.Data["solace_user"].(string) + ", need " + updatedUser)
 	}
 }
+func TestConfExCheckConfigExists(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	err := writeConfig(getValidPayload(), b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": configName},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("confExCheck returned error: %v", err)
+	}
+	if !exists {
+		t.Fatal("Expected config to exist, got false")
+	}
+}
+
+func TestConfExCheckConfigNotExists(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": "non-existent-config"},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("confExCheck returned error: %v", err)
+	}
+	if exists {
+		t.Fatal("Expected config to not exist, got true")
+	}
+}
+
+func TestConfExCheckReadError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	entry := &logical.StorageEntry{
+		Key:   "conf/corrupted-config",
+		Value: []byte("{invalid json"),
+	}
+	if err := cfg.StorageView.Put(context.Background(), entry); err != nil {
+		t.Fatal(err)
+	}
+
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": "corrupted-config"},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err == nil {
+		t.Fatal("Expected error from corrupted config, got nil")
+	}
+	if exists {
+		t.Fatal("Expected exists to be false on error")
+	}
+}
+
 func TestDeleteConfig(t *testing.T) {
 	b, cfg := getBackend(t)
 	validPayload := getValidPayload()
