@@ -12,8 +12,8 @@ require (
 	github.com/go-openapi/validate v0.24.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-hclog v1.6.3
-	github.com/hashicorp/vault/api v1.22.0
-	github.com/hashicorp/vault/sdk v0.24.0
+	github.com/hashicorp/vault/api v1.23.0
+	github.com/hashicorp/vault/sdk v0.25.0
 	github.com/testcontainers/testcontainers-go v0.41.0
 )
 
