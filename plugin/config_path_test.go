@@ -173,6 +173,26 @@ func TestUpdateConfig(t *testing.T) {
 		t.Fatal("Got user = " + resp.Data["solace_user"].(string) + ", need " + updatedUser)
 	}
 }
+func TestPersistConfigStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	storage := &errorStorage{Storage: cfg.StorageView, failPut: true}
+	req := &logical.Request{Storage: storage}
+	cfg2 := &solaceConfig{
+		Name:       "testconfig",
+		SolaceHost: "localhost:8080",
+		SolaceUser: "admin",
+		SolacePwd:  "admin",
+		SolacePath: SolacePrefix,
+	}
+
+	ok := be.persistConfig(context.Background(), req, cfg2)
+	if ok {
+		t.Fatal("Expected persistConfig to return false on storage Put error")
+	}
+}
+
 func TestConfExCheckConfigExists(t *testing.T) {
 	b, cfg := getBackend(t)
 	be := b.(*backend)
