@@ -173,6 +173,38 @@ func TestUpdateConfig(t *testing.T) {
 		t.Fatal("Got user = " + resp.Data["solace_user"].(string) + ", need " + updatedUser)
 	}
 }
+func TestDeleteConfigMissingName(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	resp, err := be.deleteConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatalf("Expected nil error, got: %v", err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing name")
+	}
+}
+
+func TestDeleteConfigStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	storage := &errorStorage{Storage: cfg.StorageView, failDelete: true}
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": configName},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	_, err := be.deleteConfig(context.Background(), &logical.Request{Storage: storage}, data)
+	if err == nil {
+		t.Fatal("Expected error from storage Delete failure")
+	}
+}
+
 func TestPersistConfigStorageError(t *testing.T) {
 	b, cfg := getBackend(t)
 	be := b.(*backend)
