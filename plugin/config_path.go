@@ -14,6 +14,10 @@ const (
 	confStoragePrefix = "conf"
 )
 
+func configStorageKey(name string) string {
+	return fmt.Sprintf("%s/%s", confStoragePrefix, name)
+}
+
 func (b *backend) pathSolaceConfig() *framework.Path {
 	return &framework.Path{
 		Pattern: "config/" + framework.GenericNameRegex("name"),
@@ -93,7 +97,7 @@ func (b *backend) readConfig(ctx context.Context, req *logical.Request, data *fr
 	if (err != nil) || (cfg == nil) {
 		return nil, err
 	}
-	// fetchConfig return uninitialized struct if config not found in storage.
+	// A storage entry exists but decoded to a zero-value config (no name field).
 	if len(cfg.Name) == 0 {
 		return nil, nil
 	}
@@ -119,7 +123,7 @@ func (b *backend) fetchConfig(ctx context.Context, req *logical.Request, data *f
 
 	b.bLock.RLock()
 	defer b.bLock.RUnlock()
-	se, err := req.Storage.Get(ctx, fmt.Sprintf("%s/%s", confStoragePrefix, name))
+	se, err := req.Storage.Get(ctx, configStorageKey(name))
 	if err != nil {
 		logger.Error("fetchConfig", "storage entry -> error", err)
 		return nil, err
@@ -138,9 +142,9 @@ func (b *backend) fetchConfig(ctx context.Context, req *logical.Request, data *f
 func (b *backend) createConfig(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	var solaceCfg solaceConfig
 	logger := b.Backend.Logger()
-	logger.Debug("writeConfig:", "path", req.Path, "req.Data", req.Data, "field data", data)
+	logger.Debug("createConfig", "path", req.Path, "req.Data", req.Data, "field data", data)
 	for key := range data.Raw {
-		logger.Trace("writeConfig", "key", key, "value", data.Raw[key])
+		logger.Trace("createConfig", "key", key, "value", data.Raw[key])
 	}
 	solaceCfg.fromData(data)
 	if len(solaceCfg.Name) == 0 {
@@ -163,8 +167,7 @@ func (b *backend) createConfig(ctx context.Context, req *logical.Request, data *
 		solaceCfg.SolacePath = SolacePrefix
 	}
 	logger.Trace("createConfig", "persisting config", solaceCfg)
-	ok := b.persistConfig(ctx, req, &solaceCfg)
-	if !ok {
+	if err := b.persistConfig(ctx, req, &solaceCfg); err != nil {
 		return logical.ErrorResponse("Persisting config failed"), nil
 	}
 	return &logical.Response{
@@ -191,8 +194,7 @@ func (b *backend) updateConfig(ctx context.Context, req *logical.Request, data *
 	solaceCfg.fromData(data)
 
 	logger.Debug("updateConfig", "persisting config = ", solaceCfg)
-	ok := b.persistConfig(ctx, req, solaceCfg)
-	if !ok {
+	if err := b.persistConfig(ctx, req, solaceCfg); err != nil {
 		return logical.ErrorResponse("Persisting config failed"), nil
 	}
 	return &logical.Response{
@@ -212,7 +214,7 @@ func (b *backend) deleteConfig(ctx context.Context, req *logical.Request, data *
 
 	b.bLock.Lock()
 	defer b.bLock.Unlock()
-	err := req.Storage.Delete(ctx, fmt.Sprintf("%s/%s", confStoragePrefix, name))
+	err := req.Storage.Delete(ctx, configStorageKey(name))
 	if err != nil {
 		logger.Error("handleDelete:", "name", name, "delete", err)
 		return nil, err
@@ -220,19 +222,18 @@ func (b *backend) deleteConfig(ctx context.Context, req *logical.Request, data *
 	return nil, nil
 }
 
-func (b *backend) persistConfig(ctx context.Context, req *logical.Request, cfg *solaceConfig) bool {
+func (b *backend) persistConfig(ctx context.Context, req *logical.Request, cfg *solaceConfig) error {
 	logger := b.Backend.Logger()
 	logger.Debug("persistConfig", "config", cfg)
 	b.bLock.Lock()
 	defer b.bLock.Unlock()
-	se, _ := logical.StorageEntryJSON(fmt.Sprintf("%s/%s", confStoragePrefix, cfg.Name), cfg)
+	se, _ := logical.StorageEntryJSON(configStorageKey(cfg.Name), cfg)
 
-	err := req.Storage.Put(ctx, se)
-	if err != nil {
+	if err := req.Storage.Put(ctx, se); err != nil {
 		logger.Error("persistConfig:", "req.Storage.Put -> error", err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 func (b *backend) confExCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {

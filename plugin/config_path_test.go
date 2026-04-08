@@ -372,9 +372,8 @@ func TestPersistConfigStorageError(t *testing.T) {
 		SolacePath: SolacePrefix,
 	}
 
-	ok := be.persistConfig(context.Background(), req, cfg2)
-	if ok {
-		t.Fatal("Expected persistConfig to return false on storage Put error")
+	if err := be.persistConfig(context.Background(), req, cfg2); err == nil {
+		t.Fatal("Expected persistConfig to return error on storage Put failure")
 	}
 }
 
