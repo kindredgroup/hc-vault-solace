@@ -56,7 +56,6 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 
 type backend struct {
 	*framework.Backend
-	config solaceConfig
 	// Locks access to the Vault. Solace is believed to be able to handle concurrent requests.
 	bLock sync.RWMutex
 }
