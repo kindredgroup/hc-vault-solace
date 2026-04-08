@@ -225,13 +225,9 @@ func (b *backend) persistConfig(ctx context.Context, req *logical.Request, cfg *
 	logger.Debug("persistConfig", "config", cfg)
 	b.bLock.Lock()
 	defer b.bLock.Unlock()
-	se, err := logical.StorageEntryJSON(fmt.Sprintf("%s/%s", confStoragePrefix, cfg.Name), cfg)
-	if err != nil {
-		logger.Error("persistConfig", "logical.StorageEntryJSON -> error", err)
-		return false
-	}
+	se, _ := logical.StorageEntryJSON(fmt.Sprintf("%s/%s", confStoragePrefix, cfg.Name), cfg)
 
-	err = req.Storage.Put(ctx, se)
+	err := req.Storage.Put(ctx, se)
 	if err != nil {
 		logger.Error("persistConfig:", "req.Storage.Put -> error", err)
 		return false
