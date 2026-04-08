@@ -1265,10 +1265,10 @@ func TestUpdateRoleVpn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Update only VPN (using same VPN since we can't create another in test)
+	newVpn := "othervpn"
 	pl := map[string]interface{}{
 		"name": testRoleName,
-		"vpn":  testVpn(), // Same VPN, but tests the branch
+		"vpn":  newVpn,
 	}
 	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
 	if err != nil {
@@ -1280,6 +1280,9 @@ func TestUpdateRoleVpn(t *testing.T) {
 	if resp.IsError() {
 		t.Fatalf("Update VPN failed: %v", resp.Error())
 	}
+	if resp.Data["vpn"] != newVpn {
+		t.Fatalf("Expected vpn=%s, got %s", newVpn, resp.Data["vpn"])
+	}
 }
 
 // TestUpdateRoleConfigName tests updating the config_name field
@@ -1290,9 +1293,10 @@ func TestUpdateRoleConfigName(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	newConfigName := "otherconfig"
 	pl := map[string]interface{}{
 		"name":        testRoleName,
-		"config_name": "default", // Same config, but tests the branch
+		"config_name": newConfigName,
 	}
 	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
 	if err != nil {
@@ -1303,6 +1307,9 @@ func TestUpdateRoleConfigName(t *testing.T) {
 	}
 	if resp.IsError() {
 		t.Fatalf("Update config_name failed: %v", resp.Error())
+	}
+	if resp.Data["config_name"] != newConfigName {
+		t.Fatalf("Expected config_name=%s, got %s", newConfigName, resp.Data["config_name"])
 	}
 }
 
@@ -1453,6 +1460,34 @@ func TestUpdateRoleMultipleFields(t *testing.T) {
 	}
 	if resp.Data["client_profile"].(string) != clientProfile() {
 		t.Fatalf("Expected client_profile '%s', got '%s'", clientProfile(), resp.Data["client_profile"].(string))
+	}
+}
+
+// TestUpdateRoleACLProfile tests updating the acl_profile field to a different value
+func TestUpdateRoleACLProfile(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := createRole(b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newACL := "other_acl_profile"
+	pl := map[string]interface{}{
+		"name":        testRoleName,
+		"acl_profile": newACL,
+	}
+	resp, err := callBackend(testRolePath, logical.UpdateOperation, pl, b, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp == nil {
+		t.Fatal("Expected response, got nil")
+	}
+	if resp.IsError() {
+		t.Fatalf("Update acl_profile failed: %v", resp.Error())
+	}
+	if resp.Data["acl_profile"].(string) != newACL {
+		t.Fatalf("Expected acl_profile=%s, got %s", newACL, resp.Data["acl_profile"])
 	}
 }
 
