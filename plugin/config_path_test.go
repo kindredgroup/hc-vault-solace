@@ -51,6 +51,19 @@ func TestListConfigs(t *testing.T) {
 	}
 }
 
+// TestListConfigsStorageError tests listConfigs when storage returns an error
+func TestListConfigsStorageError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	failStore := &errorStorage{Storage: cfg.StorageView, failList: true}
+
+	_, err := be.listConfigs(context.Background(), &logical.Request{Storage: failStore}, nil)
+	if err == nil {
+		t.Fatal("Expected error from storage List failure, got nil")
+	}
+}
+
 func TestConfigRead(t *testing.T) {
 	resp, err := callBackend(configPath, logical.ReadOperation, map[string]interface{}{})
 	if err != nil {
