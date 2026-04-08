@@ -280,11 +280,7 @@ func (b *backend) updateRole(ctx context.Context, req *logical.Request, data *fr
 		role.SubscriptionManager = smRaw.(bool)
 	}
 
-	entry, err := logical.StorageEntryJSON(roleStoragePath(role.Name), role)
-	if err != nil {
-		logger.Error("updateRole", "error from storage", err)
-		return logical.ErrorResponse("updateRole", "error", err), nil
-	}
+	entry, _ := logical.StorageEntryJSON(roleStoragePath(role.Name), role)
 
 	b.bLock.Lock()
 	defer b.bLock.Unlock()
