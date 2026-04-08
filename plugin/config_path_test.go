@@ -64,6 +64,33 @@ func TestListConfigsStorageError(t *testing.T) {
 	}
 }
 
+// TestReadConfigEmptyName tests readConfig when storage holds a config entry with an empty name,
+// exercising the len(cfg.Name) == 0 guard in readConfig.
+func TestReadConfigEmptyName(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	entry, err := logical.StorageEntryJSON(confStoragePrefix+"/emptyname", &solaceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.StorageView.Put(context.Background(), entry); err != nil {
+		t.Fatal(err)
+	}
+
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": "emptyname"},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	resp, err := be.readConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp != nil {
+		t.Fatal("Expected nil response for config with empty name")
+	}
+}
+
 func TestConfigRead(t *testing.T) {
 	resp, err := callBackend(configPath, logical.ReadOperation, map[string]interface{}{})
 	if err != nil {
