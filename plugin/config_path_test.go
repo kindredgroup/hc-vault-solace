@@ -265,6 +265,21 @@ func TestPersistConfigStorageError(t *testing.T) {
 	}
 }
 
+// TestFetchConfigMissingName tests fetchConfig when neither "name" nor "config_name" is provided.
+func TestFetchConfigMissingName(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{},
+		Schema: map[string]*framework.FieldSchema{},
+	}
+	_, err := be.fetchConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	if err == nil {
+		t.Fatal("Expected error when name is missing, got nil")
+	}
+}
+
 func TestConfExCheckConfigExists(t *testing.T) {
 	b, cfg := getBackend(t)
 	be := b.(*backend)
