@@ -116,6 +116,13 @@ func getBackend(vars ...interface{}) (logical.Backend, *logical.BackendConfig) {
 	return b, cf
 }
 
+func TestFactoryNilConfig(t *testing.T) {
+	_, err := Factory(context.Background(), nil)
+	if err == nil {
+		t.Fatal("Expected error for nil config, got nil")
+	}
+}
+
 // callBackend is a helper function that calls specific paths in the plugin.
 // optional vars: data: map[string]interface{}, b: logical.Backend, cfg: *logical.BackendConfig
 // possible usages:
