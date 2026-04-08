@@ -184,6 +184,82 @@ func TestWriteJunkConfig(t *testing.T) {
 	}
 }
 
+func createConfigDirect(t *testing.T, raw map[string]interface{}) (*logical.Response, error) {
+	t.Helper()
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+	data := &framework.FieldData{
+		Raw:    raw,
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	return be.createConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+}
+
+func TestCreateConfigMissingName(t *testing.T) {
+	resp, err := createConfigDirect(t, map[string]interface{}{
+		"host":     solaceHost,
+		"username": basicAuthUser(),
+		"password": basicAuthPwd(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing name")
+	}
+}
+
+func TestCreateConfigMissingHost(t *testing.T) {
+	resp, err := createConfigDirect(t, map[string]interface{}{
+		"name":     configName,
+		"username": basicAuthUser(),
+		"password": basicAuthPwd(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing host")
+	}
+}
+
+func TestCreateConfigMissingPassword(t *testing.T) {
+	resp, err := createConfigDirect(t, map[string]interface{}{
+		"name":     configName,
+		"host":     solaceHost,
+		"username": basicAuthUser(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response for missing password")
+	}
+}
+
+func TestCreateConfigPersistFailure(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+	failStore := &errorStorage{Storage: cfg.StorageView, failPut: true}
+	data := &framework.FieldData{
+		Raw: map[string]interface{}{
+			"name":        configName,
+			"host":        solaceHost,
+			"username":    basicAuthUser(),
+			"password":    basicAuthPwd(),
+			"disable_tls": true,
+		},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	resp, err := be.createConfig(context.Background(), &logical.Request{Storage: failStore}, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response when persist fails")
+	}
+}
+
 func TestUpdateConfig(t *testing.T) {
 	updatedUser := "vaultadmin"
 
