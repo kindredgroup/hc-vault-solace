@@ -289,6 +289,43 @@ func TestUpdateConfig(t *testing.T) {
 		t.Fatal("Got user = " + resp.Data["solace_user"].(string) + ", need " + updatedUser)
 	}
 }
+func TestUpdateConfigFetchError(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	failStore := &errorStorage{Storage: cfg.StorageView, failGet: true}
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": configName},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	_, err := be.updateConfig(context.Background(), &logical.Request{Storage: failStore}, data)
+	if err == nil {
+		t.Fatal("Expected error from storage Get failure, got nil")
+	}
+}
+
+func TestUpdateConfigPersistFailure(t *testing.T) {
+	b, cfg := getBackend(t)
+	be := b.(*backend)
+
+	if err := writeConfig(getValidPayload(), b, cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	failStore := &errorStorage{Storage: cfg.StorageView, failPut: true}
+	data := &framework.FieldData{
+		Raw:    map[string]interface{}{"name": configName, "username": "newuser"},
+		Schema: be.pathSolaceConfig().Fields,
+	}
+	resp, err := be.updateConfig(context.Background(), &logical.Request{Storage: failStore}, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatal("Expected error response when persist fails")
+	}
+}
+
 func TestDeleteConfigMissingName(t *testing.T) {
 	b, cfg := getBackend(t)
 	be := b.(*backend)
