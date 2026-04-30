@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -156,7 +156,7 @@ func StartSolaceContainer(ctx context.Context) (*SolaceContainer, error) {
 		Host:       fmt.Sprintf("%s:%s", host, mappedPort.Port()),
 		AdminUser:  adminUser,
 		AdminPwd:   adminPwd,
-		SEMPPort:   mappedPort.Int(),
+		SEMPPort:   int(mappedPort.Num()),
 		DisableTLS: true,
 	}, nil
 }

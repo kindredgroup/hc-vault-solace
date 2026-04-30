@@ -28,6 +28,7 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
+	SetTransport(transport runtime.ClientTransport)
 
 	CreateMsgVpnClientUsername(params *CreateMsgVpnClientUsernameParams, authInfo runtime.ClientAuthInfoWriter, opts ...ClientOption) (*CreateMsgVpnClientUsernameOK, error)
 
