@@ -9,7 +9,6 @@ import (
 	logical "github.com/hashicorp/vault/sdk/logical"
 )
 
-// getValidPayload returns a fresh payload map with current test config values
 func getValidPayload() map[string]interface{} {
 	return map[string]interface{}{
 		"name":        configPath,
@@ -20,7 +19,6 @@ func getValidPayload() map[string]interface{} {
 	}
 }
 
-// getInvalidPayload returns an invalid payload for testing
 func getInvalidPayload() map[string]interface{} {
 	return map[string]interface{}{
 		"host":     solaceHost,
@@ -39,10 +37,13 @@ const (
 
 var configName = strings.Split(configPath, "/")[1]
 
+func configData(be *backend, raw map[string]interface{}) *framework.FieldData {
+	return &framework.FieldData{Raw: raw, Schema: be.pathSolaceConfig().Fields}
+}
+
 func TestListConfigs(t *testing.T) {
 	b, cfg := getBackend(t)
-	validPayload := getValidPayload()
-	writeConfig(validPayload, b, cfg)
+	writeConfig(getValidPayload(), b, cfg)
 	if !fetchAndCheckOne(t, b, cfg, "configs/", configName) {
 		t.Fatal("Config not found: " + configName)
 	}
@@ -51,24 +52,18 @@ func TestListConfigs(t *testing.T) {
 	}
 }
 
-// TestListConfigsStorageError tests listConfigs when storage returns an error
 func TestListConfigsStorageError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
+	be, cfg := getTypedBackend(t)
 	failStore := &errorStorage{Storage: cfg.StorageView, failList: true}
-
 	_, err := be.listConfigs(context.Background(), &logical.Request{Storage: failStore}, nil)
 	if err == nil {
 		t.Fatal("Expected error from storage List failure, got nil")
 	}
 }
 
-// TestReadConfigEmptyName tests readConfig when storage holds a config entry with an empty name,
-// exercising the len(cfg.Name) == 0 guard in readConfig.
+// TestReadConfigEmptyName exercises the len(cfg.Name) == 0 guard in readConfig.
 func TestReadConfigEmptyName(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
+	be, cfg := getTypedBackend(t)
 
 	entry, err := logical.StorageEntryJSON(confStoragePrefix+"/emptyname", &solaceConfig{})
 	if err != nil {
@@ -78,11 +73,7 @@ func TestReadConfigEmptyName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{"name": "emptyname"},
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	resp, err := be.readConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	resp, err := be.readConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, configData(be, map[string]interface{}{"name": "emptyname"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,16 +125,14 @@ func TestWriteConfig(t *testing.T) {
 	newConfigTester(t, writeConfig)
 }
 
-// Vault CLI seems to use logical.UpdateOperation when writing new config.
+// Vault CLI uses logical.UpdateOperation when writing a new config.
 func TestUpdateNewConfig(t *testing.T) {
 	newConfigTester(t, updateConfig)
 }
 
 func newConfigTester(t *testing.T, creater func(payload map[string]interface{}, b logical.Backend, cfg *logical.BackendConfig) error) {
 	b, cfg := getBackend(t)
-	validPayload := getValidPayload()
-	err := creater(validPayload, b, cfg)
-	if err != nil {
+	if err := creater(getValidPayload(), b, cfg); err != nil {
 		t.Fatal(err)
 	}
 
@@ -156,7 +145,7 @@ func newConfigTester(t *testing.T, creater func(payload map[string]interface{}, 
 	}
 
 	conf := resp.Data
-	t.Log(resp.Data)
+	t.Log(conf)
 	if conf["name"] != configName {
 		t.Fatal("Got name = " + conf["name"].(string) + ", need " + configPath)
 	}
@@ -172,86 +161,54 @@ func newConfigTester(t *testing.T, creater func(payload map[string]interface{}, 
 	if conf["solace_path"].(string) != SolacePrefix {
 		t.Fatal("Got path = " + conf["solace_path"].(string) + ", need " + SolacePrefix)
 	}
-
 }
 
 func TestWriteJunkConfig(t *testing.T) {
 	b, cfg := getBackend(t)
-	invalidPayload := getInvalidPayload()
-	err := writeConfig(invalidPayload, b, cfg)
-	if err == nil {
+	if err := writeConfig(getInvalidPayload(), b, cfg); err == nil {
 		t.Fatal("Writing junk config succeeded")
 	}
 }
 
 func createConfigDirect(t *testing.T, raw map[string]interface{}) (*logical.Response, error) {
 	t.Helper()
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-	data := &framework.FieldData{
-		Raw:    raw,
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	return be.createConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	be, cfg := getTypedBackend(t)
+	return be.createConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, configData(be, raw))
 }
 
-func TestCreateConfigMissingName(t *testing.T) {
-	resp, err := createConfigDirect(t, map[string]interface{}{
-		"host":     solaceHost,
-		"username": basicAuthUser(),
-		"password": basicAuthPwd(),
-	})
-	if err != nil {
-		t.Fatal(err)
+func TestCreateConfigMissingRequiredField(t *testing.T) {
+	cases := []struct {
+		field   string
+		payload map[string]interface{}
+	}{
+		{"name", map[string]interface{}{"host": solaceHost, "username": basicAuthUser(), "password": basicAuthPwd()}},
+		{"host", map[string]interface{}{"name": configName, "username": basicAuthUser(), "password": basicAuthPwd()}},
+		{"password", map[string]interface{}{"name": configName, "host": solaceHost, "username": basicAuthUser()}},
 	}
-	if !resp.IsError() {
-		t.Fatal("Expected error response for missing name")
-	}
-}
-
-func TestCreateConfigMissingHost(t *testing.T) {
-	resp, err := createConfigDirect(t, map[string]interface{}{
-		"name":     configName,
-		"username": basicAuthUser(),
-		"password": basicAuthPwd(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !resp.IsError() {
-		t.Fatal("Expected error response for missing host")
-	}
-}
-
-func TestCreateConfigMissingPassword(t *testing.T) {
-	resp, err := createConfigDirect(t, map[string]interface{}{
-		"name":     configName,
-		"host":     solaceHost,
-		"username": basicAuthUser(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !resp.IsError() {
-		t.Fatal("Expected error response for missing password")
+	for _, tc := range cases {
+		t.Run("missing_"+tc.field, func(t *testing.T) {
+			resp, err := createConfigDirect(t, tc.payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !resp.IsError() {
+				t.Fatalf("Expected error response for missing %s", tc.field)
+			}
+		})
 	}
 }
 
 func TestCreateConfigPersistFailure(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
+	be, cfg := getTypedBackend(t)
 	failStore := &errorStorage{Storage: cfg.StorageView, failPut: true}
-	data := &framework.FieldData{
-		Raw: map[string]interface{}{
-			"name":        configName,
-			"host":        solaceHost,
-			"username":    basicAuthUser(),
-			"password":    basicAuthPwd(),
-			"disable_tls": true,
-		},
-		Schema: be.pathSolaceConfig().Fields,
+	raw := map[string]interface{}{
+		"name":        configName,
+		"host":        solaceHost,
+		"username":    basicAuthUser(),
+		"password":    basicAuthPwd(),
+		"disable_tls": true,
 	}
-	resp, err := be.createConfig(context.Background(), &logical.Request{Storage: failStore}, data)
+	resp, err := be.createConfig(context.Background(), &logical.Request{Storage: failStore}, configData(be, raw))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,19 +221,13 @@ func TestUpdateConfig(t *testing.T) {
 	updatedUser := "vaultadmin"
 
 	b, cfg := getBackend(t)
-	validPayload := getValidPayload()
-	err := writeConfig(validPayload, b, cfg)
-	if err != nil {
+	if err := writeConfig(getValidPayload(), b, cfg); err != nil {
 		t.Fatal(err)
 	}
-	updatePayload := map[string]interface{}{
-		"name":     configPath,
-		"username": updatedUser,
-	}
-	err = updateConfig(updatePayload, b, cfg)
-	if err != nil {
+	if err := updateConfig(map[string]interface{}{"name": configPath, "username": updatedUser}, b, cfg); err != nil {
 		t.Fatal(err)
 	}
+
 	resp, err := callBackend(configPath, logical.ReadOperation, namePayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -284,40 +235,27 @@ func TestUpdateConfig(t *testing.T) {
 	if resp.IsError() {
 		t.Fatal(resp.Error())
 	}
-
 	if resp.Data["solace_user"] != updatedUser {
 		t.Fatal("Got user = " + resp.Data["solace_user"].(string) + ", need " + updatedUser)
 	}
 }
-func TestUpdateConfigFetchError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
 
+func TestUpdateConfigFetchError(t *testing.T) {
+	be, cfg := getTypedBackend(t)
 	failStore := &errorStorage{Storage: cfg.StorageView, failGet: true}
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{"name": configName},
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	_, err := be.updateConfig(context.Background(), &logical.Request{Storage: failStore}, data)
+	_, err := be.updateConfig(context.Background(), &logical.Request{Storage: failStore}, configData(be, map[string]interface{}{"name": configName}))
 	if err == nil {
 		t.Fatal("Expected error from storage Get failure, got nil")
 	}
 }
 
 func TestUpdateConfigPersistFailure(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	if err := writeConfig(getValidPayload(), b, cfg); err != nil {
+	be, cfg := getTypedBackend(t)
+	if err := writeConfig(getValidPayload(), be, cfg); err != nil {
 		t.Fatal(err)
 	}
-
 	failStore := &errorStorage{Storage: cfg.StorageView, failPut: true}
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{"name": configName, "username": "newuser"},
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	resp, err := be.updateConfig(context.Background(), &logical.Request{Storage: failStore}, data)
+	resp, err := be.updateConfig(context.Background(), &logical.Request{Storage: failStore}, configData(be, map[string]interface{}{"name": configName, "username": "newuser"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,14 +265,8 @@ func TestUpdateConfigPersistFailure(t *testing.T) {
 }
 
 func TestDeleteConfigMissingName(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{},
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	resp, err := be.deleteConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	be, cfg := getTypedBackend(t)
+	resp, err := be.deleteConfig(context.Background(), &logical.Request{Storage: cfg.StorageView}, configData(be, map[string]interface{}{}))
 	if err != nil {
 		t.Fatalf("Expected nil error, got: %v", err)
 	}
@@ -344,26 +276,17 @@ func TestDeleteConfigMissingName(t *testing.T) {
 }
 
 func TestDeleteConfigStorageError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	storage := &errorStorage{Storage: cfg.StorageView, failDelete: true}
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{"name": configName},
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	_, err := be.deleteConfig(context.Background(), &logical.Request{Storage: storage}, data)
+	be, cfg := getTypedBackend(t)
+	failStore := &errorStorage{Storage: cfg.StorageView, failDelete: true}
+	_, err := be.deleteConfig(context.Background(), &logical.Request{Storage: failStore}, configData(be, map[string]interface{}{"name": configName}))
 	if err == nil {
 		t.Fatal("Expected error from storage Delete failure")
 	}
 }
 
 func TestPersistConfigStorageError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	storage := &errorStorage{Storage: cfg.StorageView, failPut: true}
-	req := &logical.Request{Storage: storage}
+	be, cfg := getTypedBackend(t)
+	failStore := &errorStorage{Storage: cfg.StorageView, failPut: true}
 	cfg2 := &solaceConfig{
 		Name:       "testconfig",
 		SolaceHost: "localhost:8080",
@@ -371,17 +294,14 @@ func TestPersistConfigStorageError(t *testing.T) {
 		SolacePwd:  "admin",
 		SolacePath: SolacePrefix,
 	}
-
-	if err := be.persistConfig(context.Background(), req, cfg2); err == nil {
+	if err := be.persistConfig(context.Background(), &logical.Request{Storage: failStore}, cfg2); err == nil {
 		t.Fatal("Expected persistConfig to return error on storage Put failure")
 	}
 }
 
-// TestFetchConfigMissingName tests fetchConfig when neither "name" nor "config_name" is provided.
+// TestFetchConfigMissingName uses an empty schema so neither "name" nor "config_name" resolves.
 func TestFetchConfigMissingName(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
+	be, cfg := getTypedBackend(t)
 	data := &framework.FieldData{
 		Raw:    map[string]interface{}{},
 		Schema: map[string]*framework.FieldSchema{},
@@ -392,49 +312,35 @@ func TestFetchConfigMissingName(t *testing.T) {
 	}
 }
 
-func TestConfExCheckConfigExists(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	err := writeConfig(getValidPayload(), b, cfg)
-	if err != nil {
+func TestConfExCheck(t *testing.T) {
+	be, cfg := getTypedBackend(t)
+	if err := writeConfig(getValidPayload(), be, cfg); err != nil {
 		t.Fatal(err)
 	}
 
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{"name": configName},
-		Schema: be.pathSolaceConfig().Fields,
+	cases := []struct {
+		name   string
+		key    string
+		expect bool
+	}{
+		{"exists", configName, true},
+		{"not_exists", "non-existent-config", false},
 	}
-	exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
-	if err != nil {
-		t.Fatalf("confExCheck returned error: %v", err)
-	}
-	if !exists {
-		t.Fatal("Expected config to exist, got false")
-	}
-}
-
-func TestConfExCheckConfigNotExists(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{"name": "non-existent-config"},
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
-	if err != nil {
-		t.Fatalf("confExCheck returned error: %v", err)
-	}
-	if exists {
-		t.Fatal("Expected config to not exist, got true")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, configData(be, map[string]interface{}{"name": tc.key}))
+			if err != nil {
+				t.Fatalf("confExCheck returned error: %v", err)
+			}
+			if exists != tc.expect {
+				t.Fatalf("Expected exists=%v, got %v", tc.expect, exists)
+			}
+		})
 	}
 }
 
 func TestConfExCheckReadError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
+	be, cfg := getTypedBackend(t)
 	entry := &logical.StorageEntry{
 		Key:   "conf/corrupted-config",
 		Value: []byte("{invalid json"),
@@ -442,12 +348,7 @@ func TestConfExCheckReadError(t *testing.T) {
 	if err := cfg.StorageView.Put(context.Background(), entry); err != nil {
 		t.Fatal(err)
 	}
-
-	data := &framework.FieldData{
-		Raw:    map[string]interface{}{"name": "corrupted-config"},
-		Schema: be.pathSolaceConfig().Fields,
-	}
-	exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, data)
+	exists, err := be.confExCheck(context.Background(), &logical.Request{Storage: cfg.StorageView}, configData(be, map[string]interface{}{"name": "corrupted-config"}))
 	if err == nil {
 		t.Fatal("Expected error from corrupted config, got nil")
 	}
@@ -458,16 +359,14 @@ func TestConfExCheckReadError(t *testing.T) {
 
 func TestDeleteConfig(t *testing.T) {
 	b, cfg := getBackend(t)
-	validPayload := getValidPayload()
-	err := writeConfig(validPayload, b, cfg)
-	if err != nil {
+	if err := writeConfig(getValidPayload(), b, cfg); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = callBackend(configPath, logical.DeleteOperation, namePayload, b, cfg)
-	if err != nil {
+	if _, err := callBackend(configPath, logical.DeleteOperation, namePayload, b, cfg); err != nil {
 		t.Fatal(err)
 	}
+
 	resp, err := callBackend(configPath, logical.ReadOperation, namePayload, b, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -475,7 +374,6 @@ func TestDeleteConfig(t *testing.T) {
 	if resp.IsError() {
 		t.Fatal(resp.Error())
 	}
-
 	if resp != nil {
 		t.Log(resp.Data)
 		t.Fatal("Got response, expected nil")
