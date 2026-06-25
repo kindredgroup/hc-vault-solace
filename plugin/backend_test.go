@@ -116,6 +116,12 @@ func getBackend(vars ...interface{}) (logical.Backend, *logical.BackendConfig) {
 	return b, cf
 }
 
+func getTypedBackend(t *testing.T) (*backend, *logical.BackendConfig) {
+	t.Helper()
+	b, cfg := getBackend(t)
+	return b.(*backend), cfg
+}
+
 func TestFactoryNilConfig(t *testing.T) {
 	_, err := Factory(context.Background(), nil)
 	if err == nil {
