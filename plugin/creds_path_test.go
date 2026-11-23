@@ -6,8 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/hashicorp/vault/sdk/framework"
 	logical "github.com/hashicorp/vault/sdk/logical"
+	"kindredgroup.com/solace-plugin/gen/solaceapi/all"
 )
 
 const (
@@ -16,86 +18,109 @@ const (
 
 var rotateTestCredsPath = "creds/" + testRoleName
 
-func TestRotateCreds(t *testing.T) {
-	b, cfg := getBackend(t)
+func rotateTestCreds(t *testing.T, b logical.Backend, cfg *logical.BackendConfig) (string, func()) {
+	t.Helper()
 
-	validPayload := getValidPayload()
-	err := writeConfig(validPayload, b, cfg)
+	resp, err := createRole(b, cfg)
 	if err != nil {
-		t.Fatal(err)
-	}
-	createRole(b, cfg)
-	resp, err := callBackend(rotateTestCredsPath, logical.ReadOperation, namePayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("create role: %v", err)
 	}
 	if resp.IsError() {
-		t.Fatal(resp.Error())
+		t.Fatalf("create role: %v", resp.Error())
 	}
-	if resp == nil {
-		t.Fatal("No response!")
+	resp, err = callBackend(rotateTestCredsPath, logical.ReadOperation, namePayload, b, cfg)
+	if err != nil {
+		t.Fatalf("rotate credentials: %v", err)
 	}
-	t.Log(resp)
-	user := resp.Data["username"].(string)
-	t.Log(user)
+	if resp.IsError() {
+		t.Fatalf("rotate credentials: %v", resp.Error())
+	}
+	if resp == nil || resp.Secret == nil {
+		t.Fatal("rotate credentials: missing secret")
+	}
+	username, ok := resp.Data["username"].(string)
+	if !ok || username == "" {
+		t.Fatal("rotate credentials: missing username")
+	}
 	secret := resp.Secret
-
-	userPath := fmt.Sprintf("user/%s", resp.Data["username"])
-	userPayload := getUserPayload()
-	resp, err = callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
-	}
-
-	acl := resp.Data["acl_profile"].(string)
-	if acl != aclProfile() {
-		t.Fatal("Expected ACL profile" + aclProfile() + ", received " + acl)
-	}
-
-	// clientProfile is unset, expecting to receive "default" back from Solace
-	cp := resp.Data["client_profile"].(string)
-	if cp != "default" {
-		t.Fatal("Somehow received client profile: " + cp)
-	}
-	gepo := resp.Data["guaranteed_endpoint_permission_override"].(bool)
-	if gepo != guaranteedEndpointPermissionOverride {
-		t.Fatalf("Expected GuaranteedEndpointPermissionOverride: %t, received %t", guaranteedEndpointPermissionOverride, gepo)
-	}
-
-	if !strings.HasPrefix(user, testUserPrefix+"-") {
-		t.Fatal("Expected prefix " + testUserPrefix + ", got username " + user)
-	}
-
-	// Revoke created user
-
-	pl := map[string]interface{}{
-		"username": user,
-		"role":     testRoleName,
-	}
-	resp, err = callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
-	}
-
-	resp, err = callBackend(fmt.Sprintf("user/%s/%s", testVpn(), user), logical.ReadOperation, pl, b, cfg)
-
-	// User should have been dropped, so expect error here
-	if err == nil {
-		if resp != nil {
-			if !resp.IsError() {
-				t.Log(resp)
-				t.Fatal("received valid response")
-			}
-			t.Fatal(resp.Error())
+	return username, func() {
+		t.Helper()
+		resp, err := revokeCreds(b, cfg, username, secret)
+		if err != nil {
+			t.Fatalf("revoke %q: %v", username, err)
+		}
+		if resp.IsError() {
+			t.Fatalf("revoke %q: %v", username, resp.Error())
 		}
 	}
-	t.Log(err)
+}
+
+func rotatedTestUserData(t *testing.T) map[string]interface{} {
+	t.Helper()
+	b, cfg := getBackend(t)
+	username, revoke := rotateTestCreds(t, b, cfg)
+	t.Cleanup(revoke)
+
+	resp, err := callBackend("user/"+username, logical.ReadOperation, getUserPayload(), b, cfg)
+	if err != nil {
+		t.Fatalf("read %q: %v", username, err)
+	}
+	if resp == nil {
+		t.Fatalf("read %q: missing response", username)
+	}
+	if resp.IsError() {
+		t.Fatalf("read %q: %v", username, resp.Error())
+	}
+	return resp.Data
+}
+
+func TestRotateCredsUsesRoleUsernamePrefix(t *testing.T) {
+	b, cfg := getBackend(t)
+	username, revoke := rotateTestCreds(t, b, cfg)
+	t.Cleanup(revoke)
+
+	if want := testUserPrefix + "-"; !strings.HasPrefix(username, want) {
+		t.Errorf("username %q does not start with %q", username, want)
+	}
+}
+
+func TestRotateCredsAppliesRoleACLProfile(t *testing.T) {
+	if got, want := rotatedTestUserData(t)["acl_profile"], aclProfile(); got != want {
+		t.Errorf("acl_profile = %v, want %q", got, want)
+	}
+}
+
+func TestRotateCredsUsesDefaultClientProfile(t *testing.T) {
+	if got := rotatedTestUserData(t)["client_profile"]; got != "default" {
+		t.Errorf("client_profile = %v, want default", got)
+	}
+}
+
+func TestRotateCredsSetsGuaranteedEndpointPermissionOverride(t *testing.T) {
+	if got := rotatedTestUserData(t)["guaranteed_endpoint_permission_override"]; got != guaranteedEndpointPermissionOverride {
+		t.Errorf("guaranteed_endpoint_permission_override = %v, want %t", got, guaranteedEndpointPermissionOverride)
+	}
+}
+
+func TestRevokeCredsRemovesRotatedUser(t *testing.T) {
+	b, cfg := getBackend(t)
+	username, revoke := rotateTestCreds(t, b, cfg)
+	revoke()
+
+	client, err := getClient(&solaceConfig{SolaceHost: solaceHost, SolacePath: SolacePrefix, DisableTLS: true}, b.Logger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := all.NewGetMsgVpnClientUsernamesParams()
+	params.MsgVpnName = testVpn()
+	params.Where = []string{"clientUsername==" + username}
+	users, err := client.GetMsgVpnClientUsernames(params, httptransport.BasicAuth(basicAuthUser(), basicAuthPwd()))
+	if err != nil {
+		t.Fatalf("look up revoked user %q: %v", username, err)
+	}
+	if len(users.Payload.Data) != 0 {
+		t.Errorf("revoked user %q still exists in Solace", username)
+	}
 }
 
 func TestPrefixCreds(t *testing.T) {
@@ -149,7 +174,7 @@ func TestRotateCredsMissingRole(t *testing.T) {
 
 	// FieldData without "role" field set
 	data := &framework.FieldData{
-		Raw:    map[string]interface{}{},
+		Raw: map[string]interface{}{},
 		Schema: map[string]*framework.FieldSchema{
 			"role":   {Type: framework.TypeString},
 			"prefix": {Type: framework.TypeString},
