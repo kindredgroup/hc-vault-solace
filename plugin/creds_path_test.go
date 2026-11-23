@@ -18,7 +18,49 @@ const (
 
 var rotateTestCredsPath = "creds/" + testRoleName
 
-func rotateTestCreds(t *testing.T, b logical.Backend, cfg *logical.BackendConfig) (string, func()) {
+func requireErrorResponse(t *testing.T, resp *logical.Response, err error, want string) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatalf("expected error response containing %q, got %v", want, resp)
+	}
+	if got := resp.Error().Error(); !strings.Contains(got, want) {
+		t.Fatalf("error = %q, want it to contain %q", got, want)
+	}
+}
+
+func requireStorageFailure(t *testing.T, resp *logical.Response, err error) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), "simulated Get failure") {
+		t.Fatalf("error = %v, want simulated Get failure", err)
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response, got %v", resp)
+	}
+}
+
+// revokeSecret is the minimal secret Vault needs to route a revoke request to this backend.
+func revokeSecret() *logical.Secret {
+	return &logical.Secret{InternalData: map[string]interface{}{"secret_type": SecretType}}
+}
+
+func revokeTestCreds(b logical.Backend, cfg *logical.BackendConfig, payload map[string]interface{}, secret *logical.Secret) (*logical.Response, error) {
+	return callBackend("creds/", logical.RevokeOperation, payload, b, cfg, secret)
+}
+
+func rotateCredsWithStorage(be *backend, storage logical.Storage, raw map[string]interface{}) (*logical.Response, error) {
+	req := &logical.Request{Operation: logical.ReadOperation, Path: rotateTestCredsPath, Storage: storage}
+	return be.rotateCreds(context.Background(), req, &framework.FieldData{Raw: raw, Schema: be.pathCreds().Fields})
+}
+
+func revokeCredsWithStorage(be *backend, storage logical.Storage, raw map[string]interface{}) (*logical.Response, error) {
+	req := &logical.Request{Operation: logical.RevokeOperation, Path: "creds/", Storage: storage, Secret: revokeSecret()}
+	return be.revokeCreds(context.Background(), req, &framework.FieldData{Raw: raw, Schema: be.secretCreds().Fields})
+}
+
+func rotateTestCreds(t *testing.T, b logical.Backend, cfg *logical.BackendConfig, payload map[string]interface{}) (string, func()) {
 	t.Helper()
 
 	resp, err := createRole(b, cfg)
@@ -28,7 +70,7 @@ func rotateTestCreds(t *testing.T, b logical.Backend, cfg *logical.BackendConfig
 	if resp.IsError() {
 		t.Fatalf("create role: %v", resp.Error())
 	}
-	resp, err = callBackend(rotateTestCredsPath, logical.ReadOperation, namePayload, b, cfg)
+	resp, err = callBackend(rotateTestCredsPath, logical.ReadOperation, payload, b, cfg)
 	if err != nil {
 		t.Fatalf("rotate credentials: %v", err)
 	}
@@ -45,7 +87,7 @@ func rotateTestCreds(t *testing.T, b logical.Backend, cfg *logical.BackendConfig
 	secret := resp.Secret
 	return username, func() {
 		t.Helper()
-		resp, err := revokeCreds(b, cfg, username, secret)
+		resp, err := revokeTestCreds(b, cfg, map[string]interface{}{"username": username, "role": testRoleName}, secret)
 		if err != nil {
 			t.Fatalf("revoke %q: %v", username, err)
 		}
@@ -58,7 +100,7 @@ func rotateTestCreds(t *testing.T, b logical.Backend, cfg *logical.BackendConfig
 func rotatedTestUserData(t *testing.T) map[string]interface{} {
 	t.Helper()
 	b, cfg := getBackend(t)
-	username, revoke := rotateTestCreds(t, b, cfg)
+	username, revoke := rotateTestCreds(t, b, cfg, nil)
 	t.Cleanup(revoke)
 
 	resp, err := callBackend("user/"+username, logical.ReadOperation, getUserPayload(), b, cfg)
@@ -76,10 +118,20 @@ func rotatedTestUserData(t *testing.T) map[string]interface{} {
 
 func TestRotateCredsUsesRoleUsernamePrefix(t *testing.T) {
 	b, cfg := getBackend(t)
-	username, revoke := rotateTestCreds(t, b, cfg)
+	username, revoke := rotateTestCreds(t, b, cfg, nil)
 	t.Cleanup(revoke)
 
 	if want := testUserPrefix + "-"; !strings.HasPrefix(username, want) {
+		t.Errorf("username %q does not start with %q", username, want)
+	}
+}
+
+func TestRotateCredsUsesRequestUsernamePrefix(t *testing.T) {
+	b, cfg := getBackend(t)
+	username, revoke := rotateTestCreds(t, b, cfg, map[string]interface{}{"prefix": userPrefix})
+	t.Cleanup(revoke)
+
+	if want := userPrefix + "-"; !strings.HasPrefix(username, want) {
 		t.Errorf("username %q does not start with %q", username, want)
 	}
 }
@@ -104,9 +156,17 @@ func TestRotateCredsSetsGuaranteedEndpointPermissionOverride(t *testing.T) {
 
 func TestRevokeCredsRemovesRotatedUser(t *testing.T) {
 	b, cfg := getBackend(t)
-	username, revoke := rotateTestCreds(t, b, cfg)
+	username, revoke := rotateTestCreds(t, b, cfg, nil)
 	revoke()
 
+	if solaceUserExists(t, b, username) {
+		t.Errorf("revoked user %q still exists in Solace", username)
+	}
+}
+
+// solaceUserExists queries SEMP directly so the check does not depend on the plugin's own read path.
+func solaceUserExists(t *testing.T, b logical.Backend, username string) bool {
+	t.Helper()
 	client, err := getClient(&solaceConfig{SolaceHost: solaceHost, SolacePath: SolacePrefix, DisableTLS: true}, b.Logger())
 	if err != nil {
 		t.Fatal(err)
@@ -116,349 +176,69 @@ func TestRevokeCredsRemovesRotatedUser(t *testing.T) {
 	params.Where = []string{"clientUsername==" + username}
 	users, err := client.GetMsgVpnClientUsernames(params, httptransport.BasicAuth(basicAuthUser(), basicAuthPwd()))
 	if err != nil {
-		t.Fatalf("look up revoked user %q: %v", username, err)
+		t.Fatalf("look up user %q: %v", username, err)
 	}
-	if len(users.Payload.Data) != 0 {
-		t.Errorf("revoked user %q still exists in Solace", username)
-	}
-}
-
-func TestPrefixCreds(t *testing.T) {
-	b, cfg := getBackend(t)
-
-	validPayload := getValidPayload()
-	err := writeConfig(validPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	createRole(b, cfg)
-	credsPayload := map[string]interface{}{
-		"name":   configPath,
-		"prefix": userPrefix,
-	}
-	resp, err := callBackend(rotateTestCredsPath, logical.ReadOperation, credsPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
-	}
-	if resp == nil {
-		t.Fatal("No response!")
-	}
-	t.Log(resp)
-	user := resp.Data["username"].(string)
-
-	pl := map[string]interface{}{
-		"username": user,
-		"role":     testRoleName,
-	}
-	_, err = callBackend("creds/", logical.RevokeOperation, pl, b, cfg, resp.Secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.HasPrefix(user, userPrefix+"-") {
-		t.Fatal("Expected prefix " + userPrefix + ", got username " + user)
-	}
+	return len(users.Payload.Data) != 0
 }
 
 func TestRotateCredsMissingRole(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	req := &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "creds/",
-		Storage:   cfg.StorageView,
-	}
-
-	// FieldData without "role" field set
-	data := &framework.FieldData{
-		Raw: map[string]interface{}{},
-		Schema: map[string]*framework.FieldSchema{
-			"role":   {Type: framework.TypeString},
-			"prefix": {Type: framework.TypeString},
-		},
-	}
-
-	resp, err := be.rotateCreds(context.Background(), req, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp == nil || !resp.IsError() {
-		t.Fatal("Expected error response for missing role")
-	}
-	if !strings.Contains(resp.Error().Error(), "role name is required") {
-		t.Fatalf("Expected 'role name is required' error, got: %v", resp.Error())
-	}
+	be, cfg := getTypedBackend(t)
+	resp, err := rotateCredsWithStorage(be, cfg.StorageView, map[string]interface{}{})
+	requireErrorResponse(t, resp, err, "role name is required")
 }
 
 func TestRotateCredsRoleNotFound(t *testing.T) {
 	b, cfg := getBackend(t)
-
-	pl := map[string]interface{}{
-		"role": "nonexistent-role",
-	}
-	resp, err := callBackend("creds/nonexistent-role", logical.ReadOperation, pl, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp == nil || !resp.IsError() {
-		t.Fatal("Expected error response for nonexistent role")
-	}
-	if !strings.Contains(resp.Error().Error(), "role not found") {
-		t.Fatalf("Expected 'role not found' error, got: %v", resp.Error())
-	}
+	resp, err := callBackend("creds/nonexistent-role", logical.ReadOperation, map[string]interface{}{"role": "nonexistent-role"}, b, cfg)
+	requireErrorResponse(t, resp, err, "role not found")
 }
 
 func TestRotateCredsFetchRoleError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	// Use errorStorage to simulate storage failure
-	mockStorage := &errorStorage{
-		Storage: cfg.StorageView,
-		failGet: true,
-	}
-
-	req := &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "creds/testrole",
-		Storage:   mockStorage,
-	}
-
-	data := &framework.FieldData{
-		Raw: map[string]interface{}{
-			"role": "testrole",
-		},
-		Schema: map[string]*framework.FieldSchema{
-			"role":   {Type: framework.TypeString},
-			"prefix": {Type: framework.TypeString},
-		},
-	}
-
-	resp, err := be.rotateCreds(context.Background(), req, data)
-	if err == nil {
-		t.Fatal("Expected error from storage failure")
-	}
-	if !strings.Contains(err.Error(), "simulated Get failure") {
-		t.Fatalf("Expected storage error, got: %v", err)
-	}
-	if resp != nil {
-		t.Fatalf("Expected nil response, got: %v", resp)
-	}
+	be, cfg := getTypedBackend(t)
+	storage := &errorStorage{Storage: cfg.StorageView, failGet: true}
+	resp, err := rotateCredsWithStorage(be, storage, map[string]interface{}{"role": testRoleName})
+	requireStorageFailure(t, resp, err)
 }
 
 func TestRotateCredsFetchConfigError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	// Create a role first
-	createRole(b, cfg)
-
-	// Use selective error storage that only fails on config lookups
-	selectiveStorage := &selectiveErrorStorage{
-		Storage:       cfg.StorageView,
-		failGetPrefix: confStoragePrefix,
-	}
-
-	req := &logical.Request{
-		Operation: logical.ReadOperation,
-		Path:      "creds/" + testRoleName,
-		Storage:   selectiveStorage,
-	}
-
-	data := &framework.FieldData{
-		Raw: map[string]interface{}{
-			"role": testRoleName,
-		},
-		Schema: map[string]*framework.FieldSchema{
-			"role":   {Type: framework.TypeString},
-			"prefix": {Type: framework.TypeString},
-		},
-	}
-
-	resp, err := be.rotateCreds(context.Background(), req, data)
-	if err == nil {
-		t.Fatal("Expected error from config fetch failure")
-	}
-	if !strings.Contains(err.Error(), "simulated Get failure") {
-		t.Fatalf("Expected storage error, got: %v", err)
-	}
-	if resp != nil {
-		t.Fatalf("Expected nil response, got: %v", resp)
-	}
-}
-
-func revokeCreds(b logical.Backend, cfg *logical.BackendConfig, user string, secret *logical.Secret) (*logical.Response, error) {
-	pl := map[string]interface{}{
-		"username": user,
-		"role":     testRoleName,
-	}
-	return callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
-
+	be, cfg := getTypedBackend(t)
+	createRole(be, cfg)
+	storage := &selectiveErrorStorage{Storage: cfg.StorageView, failGetPrefix: confStoragePrefix}
+	resp, err := rotateCredsWithStorage(be, storage, map[string]interface{}{"role": testRoleName})
+	requireStorageFailure(t, resp, err)
 }
 
 func TestRevokeCredsMissingUsername(t *testing.T) {
 	b, cfg := getBackend(t)
-
-	pl := map[string]interface{}{
-		"role": testRoleName,
-	}
-	// Revoke requires a secret with the correct type
-	secret := &logical.Secret{
-		InternalData: map[string]interface{}{
-			"secret_type": SecretType,
-		},
-	}
-	resp, err := callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp == nil || !resp.IsError() {
-		t.Fatal("Expected error response for missing username")
-	}
-	if !strings.Contains(resp.Error().Error(), "username is required") {
-		t.Fatalf("Expected 'username is required' error, got: %v", resp.Error())
-	}
+	resp, err := revokeTestCreds(b, cfg, map[string]interface{}{"role": testRoleName}, revokeSecret())
+	requireErrorResponse(t, resp, err, "username is required")
 }
 
 func TestRevokeCredsMissingRole(t *testing.T) {
 	b, cfg := getBackend(t)
-
-	pl := map[string]interface{}{
-		"username": "testuser",
-	}
-	secret := &logical.Secret{
-		InternalData: map[string]interface{}{
-			"secret_type": SecretType,
-		},
-	}
-	resp, err := callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp == nil || !resp.IsError() {
-		t.Fatal("Expected error response for missing role")
-	}
-	if !strings.Contains(resp.Error().Error(), "role is required") {
-		t.Fatalf("Expected 'role is required' error, got: %v", resp.Error())
-	}
+	resp, err := revokeTestCreds(b, cfg, map[string]interface{}{"username": testUser}, revokeSecret())
+	requireErrorResponse(t, resp, err, "role is required")
 }
 
 func TestRevokeCredsRoleNotFound(t *testing.T) {
 	b, cfg := getBackend(t)
-
-	pl := map[string]interface{}{
-		"username": "testuser",
-		"role":     "nonexistent-role",
-	}
-	secret := &logical.Secret{
-		InternalData: map[string]interface{}{
-			"secret_type": SecretType,
-		},
-	}
-	resp, err := callBackend("creds/", logical.RevokeOperation, pl, b, cfg, secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp == nil || !resp.IsError() {
-		t.Fatal("Expected error response for nonexistent role")
-	}
-	if !strings.Contains(resp.Error().Error(), "role not found") {
-		t.Fatalf("Expected 'role not found' error, got: %v", resp.Error())
-	}
+	resp, err := revokeTestCreds(b, cfg, map[string]interface{}{"username": testUser, "role": "nonexistent-role"}, revokeSecret())
+	requireErrorResponse(t, resp, err, "role not found")
 }
 
 func TestRevokeCredsFetchRoleError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	// Use errorStorage to simulate storage failure
-	mockStorage := &errorStorage{
-		Storage: cfg.StorageView,
-		failGet: true,
-	}
-
-	req := &logical.Request{
-		Operation: logical.RevokeOperation,
-		Path:      "creds/",
-		Storage:   mockStorage,
-		Secret: &logical.Secret{
-			InternalData: map[string]interface{}{
-				"secret_type": SecretType,
-			},
-		},
-	}
-
-	data := &framework.FieldData{
-		Raw: map[string]interface{}{
-			"username": "testuser",
-			"role":     "testrole",
-		},
-		Schema: map[string]*framework.FieldSchema{
-			"username": {Type: framework.TypeString},
-			"role":     {Type: framework.TypeString},
-		},
-	}
-
-	resp, err := be.revokeCreds(context.Background(), req, data)
-	if err == nil {
-		t.Fatal("Expected error from storage failure")
-	}
-	if !strings.Contains(err.Error(), "simulated Get failure") {
-		t.Fatalf("Expected storage error, got: %v", err)
-	}
-	if resp != nil {
-		t.Fatalf("Expected nil response, got: %v", resp)
-	}
+	be, cfg := getTypedBackend(t)
+	storage := &errorStorage{Storage: cfg.StorageView, failGet: true}
+	resp, err := revokeCredsWithStorage(be, storage, map[string]interface{}{"username": testUser, "role": testRoleName})
+	requireStorageFailure(t, resp, err)
 }
 
 func TestRevokeCredsFetchConfigError(t *testing.T) {
-	b, cfg := getBackend(t)
-	be := b.(*backend)
-
-	// Create a role that references a config
-	createRole(b, cfg)
-
-	// Create a selective error storage that only fails on config lookups
-	selectiveStorage := &selectiveErrorStorage{
-		Storage:       cfg.StorageView,
-		failGetPrefix: confStoragePrefix,
-	}
-
-	req := &logical.Request{
-		Operation: logical.RevokeOperation,
-		Path:      "creds/",
-		Storage:   selectiveStorage,
-		Secret: &logical.Secret{
-			InternalData: map[string]interface{}{
-				"secret_type": SecretType,
-			},
-		},
-	}
-
-	data := &framework.FieldData{
-		Raw: map[string]interface{}{
-			"username": "testuser",
-			"role":     testRoleName,
-		},
-		Schema: map[string]*framework.FieldSchema{
-			"username": {Type: framework.TypeString},
-			"role":     {Type: framework.TypeString},
-		},
-	}
-
-	resp, err := be.revokeCreds(context.Background(), req, data)
-	if err == nil {
-		t.Fatal("Expected error from config fetch failure")
-	}
-	if !strings.Contains(err.Error(), "simulated Get failure") {
-		t.Fatalf("Expected storage error, got: %v", err)
-	}
-	if resp != nil {
-		t.Fatalf("Expected nil response, got: %v", resp)
-	}
+	be, cfg := getTypedBackend(t)
+	createRole(be, cfg)
+	storage := &selectiveErrorStorage{Storage: cfg.StorageView, failGetPrefix: confStoragePrefix}
+	resp, err := revokeCredsWithStorage(be, storage, map[string]interface{}{"username": testUser, "role": testRoleName})
+	requireStorageFailure(t, resp, err)
 }
 
 // selectiveErrorStorage fails Get only for keys with a specific prefix
