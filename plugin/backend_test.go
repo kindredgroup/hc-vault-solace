@@ -143,24 +143,24 @@ func callBackend(path string, op logical.Operation, vars ...interface{}) (*logic
 	var d map[string]interface{}
 	var s *logical.Secret
 
-	if len(vars) == 0 || len(vars) > 4 {
+	if len(vars) > 4 {
 		return nil, fmt.Errorf("Wrong number of arguments: %d", len(vars))
 	}
 
-	if len(vars) > 0 {
-		for _, v := range vars {
-			switch t := v.(type) {
-			case *logical.BackendConfig:
-				cfg = v.(*logical.BackendConfig)
-			case logical.Backend:
-				b = v.(logical.Backend)
-			case map[string]interface{}:
-				d = v.(map[string]interface{})
-			case *logical.Secret:
-				s = v.(*logical.Secret)
-			default:
-				return nil, fmt.Errorf("Wrong type of argument: %s", t)
-			}
+	for _, v := range vars {
+		switch arg := v.(type) {
+		case *logical.BackendConfig:
+			cfg = arg
+		case logical.Backend:
+			b = arg
+		case map[string]interface{}:
+			d = arg
+		case *logical.Secret:
+			s = arg
+		case nil:
+			d = nil
+		default:
+			return nil, fmt.Errorf("Wrong type of argument: %T", arg)
 		}
 	}
 	if b == nil || cfg == nil {

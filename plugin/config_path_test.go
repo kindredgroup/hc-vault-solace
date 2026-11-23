@@ -83,7 +83,7 @@ func TestReadConfigEmptyName(t *testing.T) {
 }
 
 func TestConfigRead(t *testing.T) {
-	resp, err := callBackend(configPath, logical.ReadOperation, map[string]interface{}{})
+	resp, err := callBackend(configPath, logical.ReadOperation)
 	if err != nil {
 		t.Fatal(err)
 	}
