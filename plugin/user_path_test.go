@@ -15,45 +15,79 @@ func getUserPayload() map[string]interface{} {
 	}
 }
 
-func TestReadUser(t *testing.T) {
+func requireSuccessResponse(t *testing.T, action string, resp *logical.Response, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("%s: %v", action, err)
+	}
+	if resp.IsError() {
+		t.Fatalf("%s: %v", action, resp.Error())
+	}
+}
+
+// createTestUser creates username through the plugin and returns a closure that deletes it again.
+func createTestUser(t *testing.T, b logical.Backend, cfg *logical.BackendConfig, username string) func() {
+	t.Helper()
+	resp, err := createRole(b, cfg)
+	requireSuccessResponse(t, "create role", resp, err)
+	resp, err = callBackend("user/"+username, logical.CreateOperation, getUserPayload(), b, cfg)
+	requireSuccessResponse(t, "create user "+username, resp, err)
+	return func() {
+		t.Helper()
+		resp, err := callBackend("user/"+username, logical.DeleteOperation, getUserPayload(), b, cfg)
+		requireSuccessResponse(t, "delete user "+username, resp, err)
+	}
+}
+
+func readTestUser(t *testing.T, b logical.Backend, cfg *logical.BackendConfig, username string) map[string]interface{} {
+	t.Helper()
+	resp, err := callBackend("user/"+username, logical.ReadOperation, getUserPayload(), b, cfg)
+	requireSuccessResponse(t, "read user "+username, resp, err)
+	if resp == nil {
+		t.Fatalf("read user %s: missing response", username)
+	}
+	return resp.Data
+}
+
+// createdTestUserData creates testUser, schedules its deletion and returns what the plugin reads back.
+func createdTestUserData(t *testing.T) map[string]interface{} {
+	t.Helper()
 	b, cfg := getBackend(t)
-	validPayload := getValidPayload()
-	err := writeConfig(validPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Cleanup(createTestUser(t, b, cfg, testUser))
+	return readTestUser(t, b, cfg, testUser)
+}
 
-	createRole(b, cfg)
-	userPath := fmt.Sprintf("user/%s", testUser)
-	userPayload := getUserPayload()
-	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
+func TestReadUserReturnsUsername(t *testing.T) {
+	if got := createdTestUserData(t)["username"]; got != testUser {
+		t.Errorf("username = %v, want %q", got, testUser)
 	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
-	}
-	if resp == nil {
-		t.Fatal("No response!")
-	}
+}
 
-	resp, err = callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
+func TestReadUserReturnsRoleVpn(t *testing.T) {
+	if got, want := createdTestUserData(t)["vpn"], testVpn(); got != want {
+		t.Errorf("vpn = %v, want %q", got, want)
 	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
-	}
-	if resp == nil {
-		t.Fatal("No response!")
-	}
+}
 
-	resp, err = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
+func TestReadUserReturnsRoleACLProfile(t *testing.T) {
+	if got, want := createdTestUserData(t)["acl_profile"], aclProfile(); got != want {
+		t.Errorf("acl_profile = %v, want %q", got, want)
 	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
+}
+
+func TestReadUserReturnsEnabledUser(t *testing.T) {
+	if got := createdTestUserData(t)["enabled"]; got != true {
+		t.Errorf("enabled = %v, want true", got)
+	}
+}
+
+func TestDeleteUserRemovesUser(t *testing.T) {
+	b, cfg := getBackend(t)
+	deleteUser := createTestUser(t, b, cfg, testUser)
+	deleteUser()
+
+	if solaceUserExists(t, b, testUser) {
+		t.Errorf("deleted user %q still exists in Solace", testUser)
 	}
 }
 
@@ -76,57 +110,6 @@ func TestReadUserNotFound(t *testing.T) {
 	}
 	if !resp.IsError() {
 		t.Fatal("Expected error when reading non-existent user")
-	}
-}
-
-func TestReadUserSuccess(t *testing.T) {
-	b, cfg := getBackend(t)
-	validPayload := getValidPayload()
-	err := writeConfig(validPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	createRole(b, cfg)
-	userPath := fmt.Sprintf("user/%s", "readtest-user")
-	userPayload := getUserPayload()
-
-	// Create user first
-	resp, err := callBackend(userPath, logical.CreateOperation, userPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
-	}
-
-	// Read user and verify response fields
-	resp, err = callBackend(userPath, logical.ReadOperation, userPayload, b, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.IsError() {
-		t.Fatal(resp.Error())
-	}
-
-	// Verify response contains expected fields
-	if resp.Data["username"] != "readtest-user" {
-		t.Errorf("Expected username 'readtest-user', got %v", resp.Data["username"])
-	}
-	if resp.Data["vpn"] != testVpn() {
-		t.Errorf("Expected vpn '%s', got %v", testVpn(), resp.Data["vpn"])
-	}
-	if resp.Data["acl_profile"] != aclProfile() {
-		t.Errorf("Expected acl_profile '%s', got %v", aclProfile(), resp.Data["acl_profile"])
-	}
-	if resp.Data["enabled"] != true {
-		t.Errorf("Expected enabled to be true, got %v", resp.Data["enabled"])
-	}
-
-	// Cleanup
-	_, err = callBackend(userPath, logical.DeleteOperation, userPayload, b, cfg)
-	if err != nil {
-		t.Error(err)
 	}
 }
 

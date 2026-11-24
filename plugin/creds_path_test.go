@@ -102,18 +102,7 @@ func rotatedTestUserData(t *testing.T) map[string]interface{} {
 	b, cfg := getBackend(t)
 	username, revoke := rotateTestCreds(t, b, cfg, nil)
 	t.Cleanup(revoke)
-
-	resp, err := callBackend("user/"+username, logical.ReadOperation, getUserPayload(), b, cfg)
-	if err != nil {
-		t.Fatalf("read %q: %v", username, err)
-	}
-	if resp == nil {
-		t.Fatalf("read %q: missing response", username)
-	}
-	if resp.IsError() {
-		t.Fatalf("read %q: %v", username, resp.Error())
-	}
-	return resp.Data
+	return readTestUser(t, b, cfg, username)
 }
 
 func TestRotateCredsUsesRoleUsernamePrefix(t *testing.T) {
