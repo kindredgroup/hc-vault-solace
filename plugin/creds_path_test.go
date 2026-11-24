@@ -18,19 +18,6 @@ const (
 
 var rotateTestCredsPath = "creds/" + testRoleName
 
-func requireErrorResponse(t *testing.T, resp *logical.Response, err error, want string) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !resp.IsError() {
-		t.Fatalf("expected error response containing %q, got %v", want, resp)
-	}
-	if got := resp.Error().Error(); !strings.Contains(got, want) {
-		t.Fatalf("error = %q, want it to contain %q", got, want)
-	}
-}
-
 func requireStorageFailure(t *testing.T, resp *logical.Response, err error) {
 	t.Helper()
 	if err == nil || !strings.Contains(err.Error(), "simulated Get failure") {

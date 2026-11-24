@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	log "github.com/hashicorp/go-hclog"
@@ -177,4 +178,41 @@ func callBackend(path string, op logical.Operation, vars ...interface{}) (*logic
 		Storage:   cfg.StorageView,
 		Secret:    s,
 	})
+}
+
+func requireSuccessResponse(t *testing.T, action string, resp *logical.Response, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("%s: %v", action, err)
+	}
+	if resp.IsError() {
+		t.Fatalf("%s: %v", action, resp.Error())
+	}
+}
+
+func requireResponseData(t *testing.T, action string, resp *logical.Response, err error) map[string]interface{} {
+	t.Helper()
+	requireSuccessResponse(t, action, resp, err)
+	if resp == nil {
+		t.Fatalf("%s: missing response", action)
+	}
+	return resp.Data
+}
+
+func requireAnyErrorResponse(t *testing.T, resp *logical.Response, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.IsError() {
+		t.Fatalf("expected error response, got %v", resp)
+	}
+}
+
+func requireErrorResponse(t *testing.T, resp *logical.Response, err error, want string) {
+	t.Helper()
+	requireAnyErrorResponse(t, resp, err)
+	if got := resp.Error().Error(); !strings.Contains(got, want) {
+		t.Fatalf("error = %q, want it to contain %q", got, want)
+	}
 }
