@@ -1,6 +1,7 @@
 package solace
 
 import (
+	"errors"
 	"testing"
 
 	logical "github.com/hashicorp/vault/sdk/logical"
@@ -122,15 +123,18 @@ func TestReadUserInvalidVpn(t *testing.T) {
 	requireAnyErrorResponse(t, resp, err)
 }
 
-func TestWithRoleAndConfig(t *testing.T) {
+func TestWithRoleAndConfigRejectsNilRole(t *testing.T) {
 	b, cfg := getBackend(t)
 	nilRole := map[string]interface{}{"role": nil}
 	resp, err := callBackend("user/"+testUser, logical.ReadOperation, nilRole, b, cfg)
-	requireAnyErrorResponse(t, resp, err)
+	requireErrorResponse(t, resp, err, "withRoleAndConfig: role '' not found")
+}
 
-	_, err = callBackend("user/", logical.ReadOperation, nilRole, b, cfg)
-	if err == nil {
-		t.Fatal("Expected 'unsupported path' error")
+func TestUserPathWithoutUsernameIsUnsupported(t *testing.T) {
+	b, cfg := getBackend(t)
+	_, err := callBackend("user/", logical.ReadOperation, b, cfg)
+	if !errors.Is(err, logical.ErrUnsupportedPath) {
+		t.Fatalf("error = %v, want %v", err, logical.ErrUnsupportedPath)
 	}
 }
 
